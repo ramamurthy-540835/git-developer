@@ -20,11 +20,11 @@ import requests # New: for GitHub REST API calls
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-# Ensure google.generativeai is imported
+# Ensure google.genai is imported
 try:
-    import google.generativeai as genai
+    import google.genai as genai
 except ImportError:
-    logging.error("google-generativeai not found. Please install it: pip install google-generativeai")
+    logging.error("google-genai not found. Please install it: pip install google-genai")
     sys.exit(1)
 
 # Import github_reader_agent safely after sys.path fix
