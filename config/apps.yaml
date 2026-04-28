@@ -1,9 +1,16 @@
 apps:
   - name: vbc_dashboard
-    url: https://vbc-dashboard-1035117862188.us-central1.run.app
     title: Value-Based Care Dashboard
-    description: A comprehensive healthcare analytics dashboard designed for value-based care programs. It provides real-time insights into patient population risk, identifies high-risk cohorts, highlights care gaps, tracks key quality measures, monitors utilization patterns, supports care management actions, evaluates provider performance, and presents executive-level KPIs. This platform empowers care teams to prioritize interventions, improve patient outcomes, reduce avoidable utilization, and effectively manage both payer and provider performance within value-based contracts.
-    tags: [healthcare, value-based-care, risk-stratification, care-gaps, quality-measures, population-health, AI-insights, care-management, provider-performance, executive-reporting]
+    url: https://vbc-dashboard-1035117862188.us-central1.run.app
+    description: Healthcare analytics dashboard for value-based care programs, including population risk, high-risk cohorts, care gaps, quality measures, utilization, care management actions, provider performance, executive KPIs, and AI-driven care insights.
+    tags:
+      - healthcare
+      - value-based-care
+      - risk-stratification
+      - care-gaps
+      - quality-measures
+      - population-health
+      - AI-insights
 
   - name: weathernext_dashboard
     url: https://weathernext-dashboard-1035117862188.us-central1.run.app
