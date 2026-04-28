@@ -42,19 +42,13 @@ export default function EditorPage() {
         throw new Error(errorData.detail || `HTTP error! status: ${transcriptResponse.status}`);
       }
 
-      const data = await transcriptResponse.json();
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.details || `HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      setTranscript(data.transcript);
-      setSourceContext(data.source_context);
+      const transcriptData = await transcriptResponse.json();
+      
+      setTranscript(transcriptData.transcript);
+      setSourceContext(transcriptData.source_context);
       // Display backend warning if present
-      if (data.warning) {
-        setError(data.warning); // Use error state to display the warning
+      if (transcriptData.warning) {
+        setError(transcriptData.warning); // Use error state to display the warning
       }
     } catch (e) {
       console.error("Error fetching transcript:", e);
@@ -91,9 +85,9 @@ export default function EditorPage() {
         throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
       }
 
-      const data = await response.json();
-      alert(`MP3 Generated!\nFilename: ${data.local_file_name}\nGCS Path: ${data.gcs_path}`);
-      console.log('MP3 generation successful:', data);
+      const mp3Data = await response.json();
+      alert(`MP3 Generated!\nFilename: ${mp3Data.local_file_name}\nGCS Path: ${mp3Data.gcs_path}`);
+      console.log('MP3 generation successful:', mp3Data);
     } catch (e) {
       alert(`Error generating MP3: ${e.message}`);
       console.error('Error generating MP3:', e);
