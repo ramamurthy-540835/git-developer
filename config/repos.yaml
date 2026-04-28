@@ -1,28 +1,916 @@
 repos:
-  - name: healthcare-vbc-pa
-    full_name: ramamurthy-540835/healthcare_vbc_pa # Corrected to match actual GitHub repo name
-    repo_url: https://github.com/ramamurthy-540835/healthcare_vbc_pa
-    description: A comprehensive healthcare analytics dashboard designed for value-based care programs. It provides real-time insights into patient population risk, identifies high-risk cohorts, highlights care gaps, tracks key quality measures, monitors utilization patterns, supports care management actions, evaluates provider performance, and presents executive-level KPIs. This platform empowers care teams to prioritize interventions, improve patient outcomes, reduce avoidable utilization, and effectively manage both payer and provider performance within value-based contracts.
-    language: Python
-    private: false
-    updated_at: "2024-04-26T10:00:00Z"
-    # Example tags, these will be dynamically read by the github_reader_agent based on README/code
-    tags: [healthcare, value-based-care, risk-stratification, care-gaps, quality-measures, population-health, AI-insights]
-
-  - name: weathernext
-    full_name: ramamurthy-540835/weathernext
-    repo_url: https://github.com/ramamurthy-540835/weathernext
-    description: An advanced AI weather forecasting and climate intelligence platform offering granular predictions and actionable insights. Features include a dynamic 3D globe visualization, auto-rotating views, real-time alert scans for environmental dangers, detailed 15-day forecasts, ensemble modeling, and city-specific data. Users can interact with a conversational AI for deeper analysis, export data, and access decision briefs for critical operations.
-    language: JavaScript
-    private: false
-    updated_at: "2024-04-27T14:30:00Z"
-    tags: [AI, weather-forecasting, climate-intelligence, geospatial, 3D-visualization, alerts, data-analytics]
-
-  - name: ctopteam
-    full_name: ramamurthy-540835/ctopteam
-    repo_url: https://github.com/ramamurthy-540835/ctopteam
-    description: A user-friendly frontend for a GenAI and modernization platform, designed to accelerate digital transformation. This interface enables users to interact with generative AI models for content creation, leverage modernization tools for legacy system upgrades, and manage cloud-native applications. It features a streamlined workflow for AI-powered tasks, intelligent search capabilities, and customizable dashboards to monitor modernization progress and AI utilization.
-    language: TypeScript
-    private: false
-    updated_at: "2024-04-28T09:15:00Z"
-    tags: [GenAI, AI, modernization, digital-transformation, cloud-native, enterprise-UI]
+- name: healthcare-vbc-pa
+  full_name: ramamurthy-540835/healthcare-vbc-pa
+  repo_url: https://github.com/ramamurthy-540835/healthcare-vbc-pa
+  description: No README found. Description needs manual update.
+  private: true
+  updated_at: '2026-04-24T11:43:20Z'
+  language: TypeScript
+- name: weathernext
+  full_name: ramamurthy-540835/weathernext
+  repo_url: https://github.com/ramamurthy-540835/weathernext
+  description: No README found. Description needs manual update.
+  private: false
+  updated_at: '2026-04-18T12:01:25Z'
+  language: TypeScript
+- name: hc-pa-vbc
+  full_name: ramamurthy-540835/hc-pa-vbc
+  repo_url: https://github.com/ramamurthy-540835/hc-pa-vbc
+  description: No README found. Description needs manual update.
+  private: false
+  updated_at: '2026-04-18T10:56:37Z'
+  language: ''
+- name: healthcare_vbc_pa
+  full_name: ramamurthy-540835/healthcare_vbc_pa
+  repo_url: https://github.com/ramamurthy-540835/healthcare_vbc_pa
+  description: No README found. Description needs manual update.
+  private: true
+  updated_at: '2026-04-10T12:08:16Z'
+  language: ''
+- name: mhh-data-ai-platform-differentiators
+  full_name: mitaei/mhh-data-ai-platform-differentiators
+  repo_url: https://github.com/mitaei/mhh-data-ai-platform-differentiators
+  description: Request to Create Repository Structure for Data AI Platform Differentiators
+  private: true
+  updated_at: '2026-04-09T10:04:30Z'
+  language: Python
+- name: mhh_ai_knowledge_platform
+  full_name: mitaei/mhh_ai_knowledge_platform
+  repo_url: https://github.com/mitaei/mhh_ai_knowledge_platform
+  description: A HIPAA-compliant healthcare AI platform built on a 4D BigQuery data
+    fabric, modeling spacetime healthcare events for advanced analytics. It features
+    a multi-agent AI architecture powered by Gemini 2.0 Flash to automate complex
+    clinical workflows like Prior Authorization and Value-Based Care management.
+  private: true
+  updated_at: '2026-04-09T09:58:28Z'
+  language: TypeScript
+  tags:
+  - Healthcare AI
+  - HIPAA-compliant
+  - Data Fabric
+  - BigQuery
+  - Gemini AI
+  - Prior Authorization
+  - Value-Based Care
+  - Clinical Workflows
+  - Patient Management
+  - Analytics
+  features:
+  - 4D Data Fabric Visualization
+  - Intelligent Prior Authorization (PA) Automation
+  - Value-Based Care (VBC) AI Suite
+  - AI Clinical Workflow Automation
+  - Patient Risk Stratification
+  - AI-driven Care Plan Generation
+  - Automated Medical Necessity Checks
+  - AI Letter Generation
+  - Unified Patient 360 View
+  tech_stack:
+  - TypeScript
+  - BigQuery
+  - Gemini 2.0 Flash
+  - Multi-agent AI
+  - Machine Learning
+  - Data Visualization
+  readme_available: true
+- name: mhh-adept-solution-prior-authorization
+  full_name: mitaei/mhh-adept-solution-prior-authorization
+  repo_url: https://github.com/mitaei/mhh-adept-solution-prior-authorization
+  description: Automates healthcare prior authorization by converting clinical documents
+    into structured data. It retrieves policy details, evaluates medical necessity
+    against payer policies, and generates decision letters, streamlining the approval
+    process for payers and providers.
+  private: true
+  updated_at: '2026-04-09T09:55:28Z'
+  language: JavaScript
+  tags:
+  - healthcare
+  - prior-authorization
+  - multi-agent-system
+  - automation
+  - medical-necessity
+  - ADEPT-Framework
+  - policy-management
+  features:
+  - Automated Prior Authorization
+  - Clinical Document Data Extraction
+  - Policy Intelligence & Retrieval
+  - Medical Necessity Evaluation
+  - PA Decision Letter Generation (JSON/PDF)
+  - Multi-Agent Orchestration
+  - Server-Driven UI (SDUI)
+  - Policy-Based Access Control (Cerbos)
+  tech_stack:
+  - Python
+  - ADEPT Framework
+  - Flask
+  - Docker
+  - Docker Compose
+  - MongoDB
+  - Cerbos
+  readme_available: true
+- name: mhh-ssis-to-pyspark
+  full_name: mitaei/mhh-ssis-to-pyspark
+  repo_url: https://github.com/mitaei/mhh-ssis-to-pyspark
+  description: This project focuses on modernizing legacy data integration workflows
+    by migrating existing SQL Server Integration Services (SSIS) packages to PySpark.
+    It transforms on-premise ETL processes into scalable, cloud-ready solutions, leveraging
+    Apache Spark for distributed data processing and improved performance.
+  private: true
+  updated_at: '2026-04-09T09:44:36Z'
+  language: ''
+  tags:
+  - ETL
+  - data-migration
+  - PySpark
+  - data-engineering
+  - modernization
+  features:
+  - SSIS package conversion
+  - data pipeline refactoring
+  - distributed data processing
+  - scalability improvements
+  tech_stack:
+  - PySpark
+  - Apache Spark
+  - Python
+  - SSIS
+  - SQL Server
+  readme_available: true
+- name: mhh_lnd_knowledge_platform
+  full_name: mitaei/mhh_lnd_knowledge_platform
+  repo_url: https://github.com/mitaei/mhh_lnd_knowledge_platform
+  description: '#10839'
+  private: true
+  updated_at: '2026-04-09T09:44:32Z'
+  language: ''
+- name: mhh_ai_assessment_certification
+  full_name: mitaei/mhh_ai_assessment_certification
+  repo_url: https://github.com/mitaei/mhh_ai_assessment_certification
+  description: '#10839'
+  private: true
+  updated_at: '2026-04-09T09:44:31Z'
+  language: ''
+- name: linkedin
+  full_name: ramamurthy-540835/linkedin
+  repo_url: https://github.com/ramamurthy-540835/linkedin
+  description: Linkedin Generator
+  private: false
+  updated_at: '2026-04-06T08:37:45Z'
+  language: ''
+- name: aios
+  full_name: ramamurthy-540835/aios
+  repo_url: https://github.com/ramamurthy-540835/aios
+  description: AI OS
+  private: false
+  updated_at: '2026-04-06T07:17:14Z'
+  language: ''
+- name: w3os
+  full_name: ramamurthy-540835/w3os
+  repo_url: https://github.com/ramamurthy-540835/w3os
+  description: A modern web application project built with Next.js, designed for rapid
+    development and scalable frontend solutions. This repository provides a robust
+    foundation for creating high-performance, server-rendered React applications.
+  private: false
+  updated_at: '2026-03-14T07:33:14Z'
+  language: TypeScript
+  tags:
+  - Next.js
+  - React
+  - TypeScript
+  - Web Development
+  - Frontend
+  features:
+  - Bootstrapped with create-next-app
+  - Integrated development server with hot reloading
+  - Optimized font loading with next/font
+  - Easy deployment to Vercel
+  - App Router architecture
+  tech_stack:
+  - Next.js
+  - React
+  - TypeScript
+  - Node.js
+  - Vercel
+  - npm
+  - yarn
+  - pnpm
+  - bun
+  readme_available: true
+- name: agent-orchestrator
+  full_name: ramamurthy-540835/agent-orchestrator
+  repo_url: https://github.com/ramamurthy-540835/agent-orchestrator
+  description: No README found. Description needs manual update.
+  private: false
+  updated_at: '2026-02-25T17:58:07Z'
+  language: Python
+- name: w3
+  full_name: ramamurthy-540835/w3
+  repo_url: https://github.com/ramamurthy-540835/w3
+  description: No README found. Description needs manual update.
+  private: false
+  updated_at: '2026-02-17T08:49:00Z'
+  language: ''
+- name: mhh-databricks-agents
+  full_name: mitaei/mhh-databricks-agents
+  repo_url: https://github.com/mitaei/mhh-databricks-agents
+  description: A robust multi-agent system for Databricks environments, designed to
+    automate critical data governance tasks. It provides comprehensive capabilities
+    for profiling structured and unstructured data, generating data models, and tracking
+    data lineage, all while integrating securely with Azure Key Vault.
+  private: true
+  updated_at: '2026-02-10T13:24:59Z'
+  language: Python
+  tags:
+  - Databricks
+  - Data Profiling
+  - Data Modeling
+  - Data Lineage
+  - Multi-agent System
+  - Azure
+  - Data Governance
+  features:
+  - Automated structured data profiling (Azure Blob, SQL, Unity Catalog)
+  - Automated unstructured data profiling (PDFs, images)
+  - Automated data model and schema creation
+  - Automated data lineage tracking
+  - Secure secret management with Azure Key Vault
+  - Streamlined deployment using Databricks Bundles
+  tech_stack:
+  - Python 3.10+
+  - Databricks
+  - Azure Key Vault
+  - Azure Blob Storage
+  - Azure SQL Database
+  - Unity Catalog
+  - Databricks Bundles
+  - Azure CLI
+  readme_available: true
+- name: mhh-adept-modernizer
+  full_name: mitaei/mhh-adept-modernizer
+  repo_url: https://github.com/mitaei/mhh-adept-modernizer
+  description: An enterprise platform designed to automate the conversion of SAS Enterprise
+    Guide projects to Microsoft Fabric. It facilitates requirements definition, uploads
+    SAS code, and generates PySpark, tests, and documentation, streamlining the migration
+    of SAS workloads to a modern data analytics platform.
+  private: true
+  updated_at: '2026-01-30T20:24:26Z'
+  language: TypeScript
+  tags:
+  - SAS
+  - Microsoft Fabric
+  - Code Conversion
+  - Data Migration
+  - PySpark
+  - ETL Modernization
+  - Enterprise
+  - Automation
+  features:
+  - SAS to Microsoft Fabric Conversion
+  - Requirements-Driven Code Generation
+  - PySpark Code Generation
+  - Automated Test Case Generation
+  - Fabric Notebook Output (.ipynb)
+  - EARS Requirements Generation
+  - File Upload (SAS, TXT, SQL)
+  tech_stack:
+  - TypeScript
+  - Python
+  - PySpark
+  - Microsoft Fabric
+  - SAS
+  - Delta Lake
+  readme_available: true
+- name: mhh-sas-to-pyspark
+  full_name: mitaei/mhh-sas-to-pyspark
+  repo_url: https://github.com/mitaei/mhh-sas-to-pyspark
+  description: An AI-powered solution for migrating SAS Enterprise Guide ETL code
+    to Microsoft Fabric PySpark notebooks. It leverages the Claude API for intelligent
+    code conversion, integrates Spec-Driven Development (SDD) for requirements traceability,
+    and generates comprehensive pytest cases.
+  private: true
+  updated_at: '2026-01-13T05:45:58Z'
+  language: Python
+  tags:
+  - SAS
+  - PySpark
+  - Microsoft Fabric
+  - Generative AI
+  - ETL
+  - Code Migration
+  - Python
+  features:
+  - SAS ETL Code Conversion
+  - AI-Assisted PySpark Generation
+  - Spec-Driven Development Integration
+  - Automated Test Case Generation
+  - EARS Requirement Specification
+  - Interactive Streamlit UI
+  - Microsoft Fabric Deployment
+  tech_stack:
+  - Python
+  - Anthropic Claude API
+  - PySpark
+  - Streamlit
+  - pytest
+  - Microsoft Fabric
+  - SAS Enterprise Guide
+  readme_available: true
+- name: mhh-informatica-to-pyspark
+  full_name: mitaei/mhh-informatica-to-pyspark
+  repo_url: https://github.com/mitaei/mhh-informatica-to-pyspark
+  description: Provides artifacts and a comprehensive methodology for modernizing
+    enterprise ETL workloads, specifically migrating Informatica PowerCenter assets
+    to scalable, cloud-native Pyspark environments. This solution employs an AI-first,
+    SLM-based approach to accelerate platform transformation and ensure business continuity.
+  private: true
+  updated_at: '2026-01-07T13:56:47Z'
+  language: ''
+  tags:
+  - AI Native
+  - Platform Modernization
+  - ETL Migration
+  - Data Transformation
+  - Cloud Migration
+  - Pyspark
+  - Informatica
+  features:
+  - SLM-based Modernization
+  - AI-first Methodology
+  - Context-aware Optimization
+  - Automated Validation
+  - Business Logic Preservation
+  - Discovery & Mapping
+  - Validation & Test Automation
+  - Documentation Generation
+  tech_stack:
+  - Informatica PowerCenter
+  - Pyspark
+  readme_available: true
+- name: jhp-adept
+  full_name: ramamurthy-540835/jhp-adept
+  repo_url: https://github.com/ramamurthy-540835/jhp-adept
+  description: An AI-driven enterprise tool for healthcare data warehouse modernization,
+    converting legacy code (SAS, Informatica, SSIS, SQL Server) to PySpark for Microsoft
+    Fabric deployment. It streamlines the migration process through an intelligent
+    4-stage pipeline and confidence scoring.
+  private: false
+  updated_at: '2026-01-02T03:50:08Z'
+  language: TypeScript
+  tags:
+  - AI
+  - Code Conversion
+  - Legacy Migration
+  - Healthcare
+  - PySpark
+  - Microsoft Fabric
+  - Azure
+  - Next.js
+  features:
+  - 4-Stage AI Agent Pipeline
+  - Multi-Platform Code Conversion (SAS, Informatica, SSIS, SQL)
+  - AI-Powered Conversion (Google Gemini, Healthcare Context)
+  - Intelligent Confidence Scoring
+  - Microsoft Fabric Integration (One-click deployment)
+  - Azure Blob Storage for Samples & Context
+  tech_stack:
+  - Next.js 14.0.4
+  - TypeScript 5.x
+  - Google Gemini 2.5 Flash
+  - Microsoft Azure App Service
+  - Azure Blob Storage
+  - Microsoft Fabric
+  - Node.js 20 LTS
+  readme_available: true
+- name: costco-analytics
+  full_name: ramamurthy-540835/costco-analytics
+  repo_url: https://github.com/ramamurthy-540835/costco-analytics
+  description: An AI-powered analytics platform for Costco Business Center, providing
+    descriptive, diagnostic, predictive, and prescriptive insights through a natural
+    language 'talk-to-data' interface to enhance business decision-making.
+  private: false
+  updated_at: '2025-12-12T05:12:33Z'
+  language: Python
+  tags:
+  - AI
+  - Analytics
+  - Talk-to-Data
+  - Business Intelligence
+  - Machine Learning
+  - Google Cloud
+  - Python
+  features:
+  - AI-powered Natural Language Interface (Talk-to-Data)
+  - Real-time Data Dashboards
+  - Descriptive Analytics
+  - Diagnostic Analytics (Root Cause Analysis)
+  - Predictive Analytics (ML-based Forecasting)
+  - Prescriptive Analytics (Actionable Recommendations)
+  - Lead Conversion Prediction
+  - Member Segmentation
+  tech_stack:
+  - Python
+  - FastAPI
+  - React
+  - Google Cloud Platform (GCP)
+  - Vertex AI Gemini
+  - BigQuery
+  - BigQuery ML
+  - Docker
+  readme_available: true
+- name: csat
+  full_name: ramamurthy-540835/csat
+  repo_url: https://github.com/ramamurthy-540835/csat
+  description: No README found. Description needs manual update.
+  private: false
+  updated_at: '2025-12-09T05:23:22Z'
+  language: ''
+- name: sokosumi-agents
+  full_name: ramamurthy-540835/sokosumi-agents
+  repo_url: https://github.com/ramamurthy-540835/sokosumi-agents
+  description: A comprehensive AI companion platform on the Cardano blockchain, enabling
+    user-owned, self-learning digital agents. It integrates AI with DeFi, DAO governance,
+    and dApp building, powered by Masumi Network for agent monetization and collaboration.
+  private: false
+  updated_at: '2025-11-30T01:16:48Z'
+  language: TypeScript
+  tags:
+  - AI
+  - Blockchain
+  - Cardano
+  - Decentralized Agents
+  - DeFi
+  - DAO
+  - Web3
+  - TypeScript
+  features:
+  - AI Companion Agents (Gemini-powered)
+  - DAO Governance Integration
+  - DeFi Planning & Yield Optimization
+  - Market Insights & Predictive Analysis
+  - Visual dApp Builder with Code Generation
+  - Agent Monetization via Masumi Network
+  - On-chain Agent Registry & DID
+  - Cardano Wallet Integration (CIP-30)
+  - Plutus Smart Contracts
+  tech_stack:
+  - Next.js
+  - TypeScript
+  - GCP Cloud Run
+  - GCP Cloud Functions
+  - Vertex AI (Gemini)
+  - BigQuery ML
+  - Cardano (Plutus, Aiken)
+  - Mesh.js
+  - TailwindCSS
+  readme_available: true
+- name: cardano-life-agents-v31
+  full_name: ramamurthy-540835/cardano-life-agents-v31
+  repo_url: https://github.com/ramamurthy-540835/cardano-life-agents-v31
+  description: This project implements a system of autonomous, 'life-like' agents
+    designed to operate within the Cardano blockchain ecosystem. It provides a framework
+    for simulating and managing decentralized entities, fostering research and development
+    of advanced DApps on Cardano.
+  private: false
+  updated_at: '2025-11-29T11:20:45Z'
+  language: TypeScript
+  tags:
+  - Cardano
+  - Blockchain
+  - Decentralized Agents
+  - TypeScript
+  - DApp Development
+  - Simulation
+  features:
+  - Agent behavior modeling and simulation
+  - Seamless integration with Cardano blockchain
+  - Tools for managing agent states and transactions
+  - Extensible framework for DApp development
+  - Real-time interaction with the Cardano network
+  tech_stack:
+  - TypeScript
+  - Cardano Blockchain
+  - Node.js
+  readme_available: true
+- name: cardano-life-agents-v2
+  full_name: ramamurthy-540835/cardano-life-agents-v2
+  repo_url: https://github.com/ramamurthy-540835/cardano-life-agents-v2
+  description: Cardano Life Agents v2.0 is an AI-powered digital companion platform
+    built on the Cardano blockchain. It enables self-learning AI agents, leveraging
+    the Masumi Network for monetization and collaboration, and integrates with DeFi,
+    DAO governance, and dApp building functionalities.
+  private: true
+  updated_at: '2025-11-29T11:17:04Z'
+  language: TypeScript
+  tags:
+  - AI
+  - Cardano
+  - Blockchain
+  - Agents
+  - DeFi
+  - DAO
+  - dApp
+  - TypeScript
+  - GCP
+  features:
+  - AI Companion (Self-learning agents)
+  - DAO Governance (Proposal analysis, vote delegation)
+  - DeFi Planning (Yield optimization, portfolio management)
+  - Market Insights (Real-time analysis and predictions)
+  - dApp Builder (Visual builder with code generation)
+  - Masumi Network (Agent monetization and collaboration)
+  tech_stack:
+  - Next.js
+  - TypeScript
+  - TailwindCSS
+  - Mesh.js
+  - Vertex AI (Gemini)
+  - Google Cloud Platform (Cloud Run, Cloud Functions)
+  - BigQuery ML
+  - Cardano
+  - Aiken / Plutus
+  readme_available: true
+- name: cardano-life-agents
+  full_name: ramamurthy-540835/cardano-life-agents
+  repo_url: https://github.com/ramamurthy-540835/cardano-life-agents
+  description: A decentralized AI agent platform creating user-owned, privacy-preserving
+    digital companions on the Cardano blockchain. It leverages Vertex AI and Plutus
+    smart contracts to enable secure, monetizable, and on-chain verified AI agents
+    for services like DAO vote delegation, financial planning, and market insights.
+  private: true
+  updated_at: '2025-11-26T04:06:14Z'
+  language: TypeScript
+  tags:
+  - AI Agents
+  - Cardano
+  - Blockchain
+  - Decentralized AI
+  - Web3
+  - Smart Contracts
+  - Vertex AI
+  - DeFi
+  features:
+  - User-Owned AI Agents
+  - Privacy-Preserving Computations
+  - Monetizable Digital Companions
+  - On-Chain Verified Actions
+  - DAO Vote Delegation Service
+  - Financial Planning Service
+  - Market Insights Service
+  - Wallet-based Authentication (CIP-30)
+  - On-chain Agent Registry
+  tech_stack:
+  - Next.js
+  - TypeScript
+  - TailwindCSS
+  - Cardano
+  - Aiken
+  - Mesh.js
+  - Blockfrost
+  - Vertex AI (Gemini)
+  - BigQuery ML
+  - Masumi Network
+  - GCP Cloud Run
+  - GCP Cloud Functions
+  - Plutus Smart Contracts
+  readme_available: true
+- name: talentedge
+  full_name: ramamurthy-540835/talentedge
+  repo_url: https://github.com/ramamurthy-540835/talentedge
+  description: No README found. Description needs manual update.
+  private: true
+  updated_at: '2025-11-25T16:33:17Z'
+  language: TypeScript
+- name: MeterReaderProExpo
+  full_name: ramamurthy-540835/MeterReaderProExpo
+  repo_url: https://github.com/ramamurthy-540835/MeterReaderProExpo
+  description: Electricity Meter Reader Pro Expo
+  private: false
+  updated_at: '2025-11-15T08:27:37Z'
+  language: JavaScript
+- name: costco-agent-assist
+  full_name: ramamurthy-540835/costco-agent-assist
+  repo_url: https://github.com/ramamurthy-540835/costco-agent-assist
+  description: A Google Cloud-native Post-Call Analytics and Business Intelligence
+    solution for Oracle Digital Assistant interactions, providing real-time conversation
+    analytics, AI-powered insights, and lead intelligence for Costco's customer service
+    operations.
+  private: false
+  updated_at: '2025-11-14T04:42:38Z'
+  language: JavaScript
+  tags:
+  - gcp
+  - analytics
+  - ai
+  - sentiment-analysis
+  - customer-service
+  - oracle-digital-assistant
+  - bigquery
+  - vertex-ai
+  - serverless
+  features:
+  - Real-Time Analytics Dashboard
+  - AI-Powered Conversation Insights
+  - Lead Intelligence & Scoring
+  - Historical Trend Analysis
+  - Product Insights & Mentions
+  - Customer Sentiment Analysis
+  - Topic Extraction & Entity Recognition
+  - Resolution Rate Tracking
+  - Cross-sell/Upsell Suggestions
+  tech_stack:
+  - JavaScript
+  - Python
+  - Next.js
+  - BigQuery
+  - Vertex AI (Gemini)
+  - Cloud Functions
+  - Cloud Storage
+  - Cloud Run
+  - Oracle Digital Assistant (integration)
+  readme_available: true
+- name: Splunk_GCP
+  full_name: mitchatboat/Splunk_GCP
+  repo_url: https://github.com/mitchatboat/Splunk_GCP
+  description: A real-time security analytics dashboard integrating authentication
+    logs with Google Cloud Platform, leveraging BigQuery ML for predictive insights
+    and prescriptive actions. It showcases the four pillars of analytics for comprehensive
+    security operations.
+  private: false
+  updated_at: '2025-11-11T11:32:41Z'
+  language: JavaScript
+  tags:
+  - GCP
+  - BigQuery
+  - Security Analytics
+  - Machine Learning
+  - Real-time
+  - Dashboard
+  - Cloud Run
+  - Splunk
+  features:
+  - Real-time security analytics dashboard with auto-refresh
+  - Visualizations for Descriptive, Diagnostic, Predictive, and Prescriptive analytics
+  - BigQuery ML-powered anomaly detection and risk prediction
+  - Automated security recommendations and risk-based action prioritization
+  - Quick deploy to Google Cloud Run
+  tech_stack:
+  - Next.js 14
+  - Tailwind CSS
+  - Recharts
+  - Google BigQuery
+  - BigQuery ML
+  - Google Cloud Run
+  - Docker
+  readme_available: true
+- name: ai-tutor
+  full_name: ramamurthy-540835/ai-tutor
+  repo_url: https://github.com/ramamurthy-540835/ai-tutor
+  description: AI-powered educational platform with Next.js, Firestore, and Vertex
+    AI
+  private: false
+  updated_at: '2025-11-08T18:19:37Z'
+  language: JavaScript
+- name: cementai-optimizer
+  full_name: ramamurthy-540835/cementai-optimizer
+  repo_url: https://github.com/ramamurthy-540835/cementai-optimizer
+  description: CementAI Optimizer is the world's first Generative AI platform for
+    autonomous cement plant operations, leveraging Agentic AI to significantly reduce
+    energy costs, improve quality, and enhance sustainability across the entire production
+    process.
+  private: false
+  updated_at: '2025-11-02T15:09:34Z'
+  language: TypeScript
+  tags:
+  - Generative AI
+  - Industrial AI
+  - Process Optimization
+  - Cement Industry
+  - Autonomous Systems
+  - Google Cloud
+  - Energy Efficiency
+  - Sustainability
+  - Predictive Analytics
+  - Digital Transformation
+  features:
+  - Real-time operational optimization (Kiln, Mills, Dust Control)
+  - AI-driven raw material management
+  - Smart energy consumption reduction
+  - Predictive quality assurance
+  - Enhanced sustainability and carbon reduction
+  - Unified plant intelligence and autonomous decision-making
+  - Continuous learning and adaptive control
+  tech_stack:
+  - TypeScript
+  - Google Cloud Platform
+  - Gemini Pro
+  - BigQuery ML
+  - Cloud Vision API
+  - Agent Builder
+  - GitHub
+  readme_available: true
+- name: cement-ai
+  full_name: ramamurthy-540835/cement-ai
+  repo_url: https://github.com/ramamurthy-540835/cement-ai
+  description: CementAI — GenAI Optimization for Cement Industry
+  private: false
+  updated_at: '2025-10-28T14:01:51Z'
+  language: Python
+- name: ai-agent
+  full_name: ramamurthy-540835/ai-agent
+  repo_url: https://github.com/ramamurthy-540835/ai-agent
+  description: This project delivers a professional, enterprise-grade AI agent assist
+    application, enabling real-time transcript analysis, AI-powered response suggestions,
+    and seamless embedding into existing CRM systems like Oracle Service Cloud.
+  private: false
+  updated_at: '2025-10-25T05:49:46Z'
+  language: JavaScript
+  tags:
+  - AI
+  - Agent Assist
+  - Real-time
+  - Customer Service
+  - Enterprise
+  - GCP
+  - Cloud Run
+  - Oracle Integration
+  - Web Application
+  features:
+  - Real-time conversation transcription with speaker differentiation and timestamps
+  - AI-powered smart reply suggestions and agent behavior recommendations
+  - One-click actions to copy or send AI suggestions to the transcript
+  - Knowledge base article suggestions with confidence scores
+  - Seamless iframe integration for embedding into CRM systems like Oracle Service
+    Cloud
+  - Professional and responsive user interface with smooth animations and dynamic
+    updates
+  - Automated deployment and scaling via Google Cloud Build and Cloud Run
+  - Comprehensive testing scenarios ensuring production readiness
+  tech_stack:
+  - JavaScript
+  - Google Cloud Platform (GCP)
+  - GCP Cloud Run
+  - GCP Cloud Build
+  - Google Dialogflow
+  - HTML/CSS
+  - Oracle Service Cloud Integration
+  readme_available: true
+- name: chennai-google
+  full_name: ramamurthy-540835/chennai-google
+  repo_url: https://github.com/ramamurthy-540835/chennai-google
+  description: No README found. Description needs manual update.
+  private: false
+  updated_at: '2025-10-04T08:45:52Z'
+  language: HTML
+- name: chatbot
+  full_name: ramamurthy-540835/chatbot
+  repo_url: https://github.com/ramamurthy-540835/chatbot
+  description: A Proof of Concept (POC) chatbot for Costco, built using Next.js and
+    integrated with Dialogflow. It aims to assist users with queries related to Costco's
+    services and products, enhancing customer interaction.
+  private: true
+  updated_at: '2025-09-06T02:32:56Z'
+  language: JavaScript
+  tags:
+  - chatbot
+  - POC
+  - Next.js
+  - Dialogflow
+  - NLU
+  - customer service
+  - enterprise
+  - Costco
+  features:
+  - Chatbot UI built with React and Next.js
+  - Dialogflow integration for intent recognition
+  - Admin interface for managing chatbot intents
+  - Customizable responses and easy deployment
+  tech_stack:
+  - Next.js
+  - React
+  - Dialogflow
+  - Node.js
+  - Python
+  readme_available: true
+- name: finetuning
+  full_name: ramamurthy-540835/finetuning
+  repo_url: https://github.com/ramamurthy-540835/finetuning
+  description: This project provides a comprehensive solution for finetuning Large
+    Language Models (LLMs) specifically for healthcare data quality tasks. It includes
+    tools for synthetic healthcare data generation and an automated pipeline to train
+    models that improve data integrity and analysis in medical contexts.
+  private: false
+  updated_at: '2025-08-22T23:21:10Z'
+  language: Python
+  tags:
+  - LLM Finetuning
+  - Healthcare AI
+  - Data Quality
+  - Machine Learning
+  - Python
+  features:
+  - Synthetic Healthcare Data Generation
+  - Healthcare Data Quality Operations
+  - LLM Finetuning (Healthcare-specific)
+  - Automated Training Pipeline Setup
+  - Data Quality Rule Management
+  tech_stack:
+  - Python
+  - Bash/Shell
+  - LLM Libraries
+  readme_available: true
+- name: prompt_craft2.0
+  full_name: ramamurthy-540835/prompt_craft2.0
+  repo_url: https://github.com/ramamurthy-540835/prompt_craft2.0
+  description: An enterprise AI prompt engineering platform supporting Model Context
+    Protocol (MCP) and multi-LLM environments. It enables structured, domain-aware
+    prompting for various industries like banking, healthcare, and retail, with built-in
+    diagnostics and versioning.
+  private: false
+  updated_at: '2025-07-03T02:50:26Z'
+  language: TypeScript
+  tags:
+  - AI
+  - Prompt Engineering
+  - LLM
+  - Generative AI
+  - TypeScript
+  - Next.js
+  - Neo4j
+  - LangChain
+  - Enterprise
+  - MCP
+  - Tailwind CSS
+  features:
+  - Domain-aware prompting (Banking, Healthcare, Retail, Architecture)
+  - Multi-model LLM support (Local & Cloud)
+  - Contextual prompt strategies (Instruction, Chain-of-Thought, Few-shot, RAG)
+  - Neo4j graph database integration for prompt versioning & analytics
+  - LangChain integration
+  - Real-time health diagnostics, error feedback, and model connection testing
+  - GitHub & Google Workspace integration for prompt sync & sharing
+  - PromptCraft JSON format for standardization
+  - Model Context Protocol (MCP) support
+  tech_stack:
+  - Next.js 14
+  - TypeScript 5
+  - Tailwind CSS 3
+  - Lucide Icons
+  - Neo4j
+  - LangChain
+  - GPT
+  - Claude
+  - Phi-3
+  - SQLCoder
+  - DeepSeek
+  - Mistral
+  - Vercel (deployment)
+  readme_available: true
+- name: ai_sql
+  full_name: ramamurthy-540835/ai_sql
+  repo_url: https://github.com/ramamurthy-540835/ai_sql
+  description: Advanced system for converting English data quality rules into validated
+    SQL using LangGraph, Chroma, and Neo4j
+  private: false
+  updated_at: '2025-06-21T04:07:24Z'
+  language: ''
+- name: sakthi-platform
+  full_name: ramamurthy-540835/sakthi-platform
+  repo_url: https://github.com/ramamurthy-540835/sakthi-platform
+  description: The MCP Language (Sakthi) is a specialized framework for designing
+    and executing Model Context Protocols (MCP) in Natural Language Processing. It
+    provides a structured approach to manage context-aware workflows, semantic parsing,
+    and integration with LLMs for context-driven decision-making and language transformations
+  private: false
+  updated_at: '2025-06-20T04:24:46Z'
+  language: Python
+- name: upgraded-computing-machine
+  full_name: ramamurthy-540835/upgraded-computing-machine
+  repo_url: https://github.com/ramamurthy-540835/upgraded-computing-machine
+  description: MCP Code Comply is an AI-powered tool for MCP servers that automates
+    compliance validation, business rule translation, and SQL code generation. It
+    streamlines integration with LLMs and GitLab workflows, enhancing code quality
+    and development efficiency.
+  private: false
+  updated_at: '2025-06-17T16:43:59Z'
+  language: ''
+  tags:
+  - AI
+  - Compliance
+  - Code Generation
+  - GitLab
+  - LLM
+  - Automation
+  - SQL
+  features:
+  - GitLab Integration
+  - AI Code Generation
+  - Compliance Checker
+  - Customizable Prompts
+  - Workflow Automation
+  tech_stack:
+  - Python
+  - GitLab API
+  - LLMs
+  - SQL
+  readme_available: true
