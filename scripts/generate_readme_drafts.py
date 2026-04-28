@@ -278,7 +278,7 @@ def main():
         if not full_name or not repo_url:
             logging.warning(f"Skipping repo with missing full_name or repo_url: {repo_metadata.get('name', 'Unknown')}")
             report["skipped_local"].append({"full_name": full_name, "reason": "Missing full_name or repo_url"})
-            report["summary"]["skipped_count"] += 1
+            report["summary"]["skipped_local_count"] += 1
             continue
 
         owner, name = full_name.split('/')
@@ -290,7 +290,7 @@ def main():
         if output_file.exists() and not args.force:
             logging.info(f"SKIP existing: README for '{full_name}' already exists at '{output_file}' (use --force to overwrite).")
             report["skipped_local"].append({"full_name": full_name, "reason": "README exists, --force not used"})
-            report["summary"]["skipped_count"] += 1
+            report["summary"]["skipped_local_count"] += 1
             continue
         
         logging.info(f"Processing README for '{full_name}'...")
