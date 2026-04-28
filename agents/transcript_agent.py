@@ -62,12 +62,13 @@ async def generate_transcript(app: dict) -> tuple[str, dict]:
     # Construct the prompt for Gemini
     prompt_parts = []
 
-    base_instruction = "Generate only a voiceover narration script for an enterprise demo. " \
-                       "The script should be 60-90 seconds long and maintain a professional, confident, and informative enterprise demo tone. " \
-                       "Do not include any introductory phrases like 'Here is the transcript' or 'Welcome to the demo'. " \
-                       "Do not use markdown formatting (like bolding, italics, or headings) or bullet points. " \
-                       "Focus solely on explaining the application's features and benefits as if you are narrating a live demonstration. " \
-                       "Avoid any commentary about writing the script itself, technical access issues, or placeholder text."
+    base_instruction = "Your task is to generate ONLY a compelling, voiceover-ready narration script for an enterprise application demo. " \
+                       "The script MUST be between 60 to 90 seconds long when spoken and must maintain a professional, confident, and highly informative enterprise demo tone. " \
+                       "STRICTLY adhere to these formatting rules: Do NOT include any introductory or concluding meta-commentary (e.g., 'Here is the transcript', 'Welcome to the demo'). " \
+                       "Do NOT use any markdown formatting (e.g., bolding, italics, headings) or bullet points. " \
+                       "Focus entirely on explaining the application's features, benefits, and value proposition as if you are narrating a live demonstration. " \
+                       "Crucially, DO NOT mention any technical issues, URL access problems, or script-writing instructions within the narration itself. " \
+                       "Output ONLY the final voiceover narration."
 
     prompt_parts.append(base_instruction)
 
@@ -113,7 +114,9 @@ async def generate_transcript(app: dict) -> tuple[str, dict]:
         if page_content.get("raw_text"):
             prompt_parts.append(f"Snippet of raw visible page text (for additional context): {page_content['raw_text']}")
     elif app_url and "Error" in page_content.get("title", ""):
-        prompt_parts.append(f"\n\nNote: The application URL '{app_url}' could not be fully accessed or provided meaningful visible content. Please generate the narration based primarily on the application's title, description, and domain knowledge (including tags), maintaining an informative tone without mentioning this technical access issue within the narration itself.")
+        # If URL content is weak or inaccessible, instruct the LLM to rely on metadata and domain knowledge.
+        # This instruction is *for the LLM*, not to be part of the final narration.
+        prompt_parts.append(f"\n\nIMPORTANT: The live application at '{app_url}' could not be fully accessed or yielded insufficient visible content. Therefore, generate the narration based SOLELY on the provided application title, description, and key themes/tags (domain knowledge). Do NOT mention the URL access issue in the final narration.")
 
     final_prompt = "\n".join(prompt_parts)
     logging.info(f"Sending prompt to LLM (first 500 chars):\n---\n{final_prompt[:500]}...\n---\n")

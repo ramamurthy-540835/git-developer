@@ -16,12 +16,6 @@ def generate_script(prompt: str) -> str:
     """
     model = genai.GenerativeModel('gemini-2.5-flash')
 
-    full_prompt = (
-        f"Generate a narration script for a video. "
-        f"The script should be approximately 2-3 minutes long when narrated. "
-        f"It should be plain text, without any formatting like bolding or headings. "
-        f"The topic of the script is: {prompt}"
-    )
-
-    response = model.generate_content(full_prompt)
-    return response.text
+    response = model.generate_content(prompt)
+    # Ensure to return only the text content, strip any leading/trailing whitespace/newlines
+    return response.text.strip()
