@@ -50,10 +50,14 @@ export default function EditorPage() {
       const data = await response.json();
       setTranscript(data.transcript);
       setSourceContext(data.source_context);
+      // Display backend warning if present
+      if (data.warning) {
+        setError(data.warning); // Use error state to display the warning
+      }
     } catch (e) {
       console.error("Error fetching transcript:", e);
       setError(e.message);
-      setTranscript(`Error fetching transcript: ${e.message}`);
+      setTranscript(`Failed to load transcript. Please regenerate or check the console for errors.`); // Generic user-friendly message
       setSourceContext(null); // Clear context on error
     } finally {
       setLoading(false);
