@@ -1,1 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual env
+venv/
+.venv/
+env/
+
+# Aider
+.aider*
+.aider/
+
+# Env files
+.env
+.env.local
+
+# OS
+.DS_Store
+
+# Logs
+*.log
+
+# Node (future Next.js)
+node_modules/
+
+# Output files
+output/
+tmp/
 .aider*
