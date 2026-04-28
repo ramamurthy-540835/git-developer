@@ -34,7 +34,7 @@ export default function EditorPage() {
       // Frontend Next.js API route is `/api/transcript`, but the actual backend Flask API is `http://localhost:5000/api/transcript`
       // When deployed, Next.js could proxy this, or the Flask app could be on the same domain.
       // For local development, we're calling the Flask backend directly.
-      const response = await fetch('http://localhost:5000/api/transcript', { 
+      const response = await fetch('http://localhost:8000/api/transcript', { // Use explicit localhost for FastAPI backend
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -68,9 +68,30 @@ export default function EditorPage() {
     fetchTranscript(); // Re-fetch transcript with current appName
   };
 
-  const handleGenerateMp3 = () => {
-    alert('Generate MP3 clicked!');
-    // In a real app, this would trigger a backend call to generate MP3
+  const handleGenerateMp3 = async () => {
+    alert('Generating MP3...'); // User feedback
+    try {
+      // Assuming 'transcript' state holds the current editable content
+      const response = await fetch('http://localhost:8000/api/generate-mp3', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: appName, transcript: transcript }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      alert(`MP3 Generated!\nFilename: ${data.local_file_name}\nGCS Path: ${data.gcs_path}`);
+      console.log('MP3 generation successful:', data);
+    } catch (e) {
+      alert(`Error generating MP3: ${e.message}`);
+      console.error('Error generating MP3:', e);
+    }
   };
 
   const handleGenerateVideo = () => {

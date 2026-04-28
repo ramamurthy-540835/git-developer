@@ -1,68 +1,122 @@
 import os
 import asyncio
-from flask import Flask, request, jsonify
-from dotenv import load_dotenv
 import logging
-from flask_asgi_middleware import ASGIMiddleware # Import ASGIMiddleware
+import yaml
+from dotenv import load_dotenv
+from typing import List, Dict, Any, Optional
+
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
-app = Flask(__name__)
 
 # Load environment variables from .env.local if present
 load_dotenv(dotenv_path='./.env.local')
 
-# Wrap the Flask app with ASGIMiddleware to make it compatible with Uvicorn
-app_asgi = ASGIMiddleware(app)
-
-# Assuming agents.transcript_agent exists and has generate_transcript
-try:
-    from agents.transcript_agent import generate_transcript
-except ImportError as import_error_orig:
-    app.logger.error(f"Failed to import generate_transcript: {import_error_orig}")
-    # Capture the error message as a string so it's available in the nested function's scope
-    error_message = str(import_error_orig)
-    # Define a fallback if import fails, to prevent app crash
-    async def generate_transcript(app_data):
-        return (f"Error: Transcript generation service not available. "
-                f"Missing dependency: {error_message}", {})
+# Import agents
+# These imports are critical; if they fail, the app shouldn't start.
+from agents.transcript_agent import generate_transcript
+from agents.tts_agent import text_to_mp3
+from agents.gcs_agent import upload_to_gcs
 
 
-@app.route('/api/transcript', methods=['POST'])
-def get_generated_transcript_sync():
-    """
-    Receives app details, generates a transcript using URL content,
-    and returns the transcript and source context.
-    This is a synchronous Flask route that calls an async function.
-    """
-    if not request.is_json:
-        app.logger.warning("Received non-JSON request for /api/transcript")
-        return jsonify({"error": "Request must be JSON"}), 400
+# Initialize FastAPI app
+app = FastAPI(title="GCP Studio Media Agent")
 
-    data = request.get_json()
-    app_data = data.get('app')
+# Add CORS middleware
+origins = [
+    "http://localhost:3000",
+    "http://10.100.15.44:3000", # As per user request
+]
 
-    if not app_data:
-        app.logger.warning("Missing 'app' data in request for /api/transcript")
-        return jsonify({"error": "Missing 'app' data in request"}), 400
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-    app.logger.info(f"Received request for transcript generation for app: {app_data.get('name')}")
+# Pydantic models for request bodies
+class AppData(BaseModel):
+    name: str
+    url: str
+    description: Optional[str] = None
+    # Add other fields like tags if they become relevant in the future
+
+class TranscriptRequest(BaseModel):
+    app: AppData
+
+class Mp3GenerateRequest(BaseModel):
+    name: str
+    transcript: str
+
+# Endpoints
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
+
+@app.get("/api/apps")
+async def get_apps():
+    try:
+        with open("config/apps.yaml", "r") as f:
+            apps_config = yaml.safe_load(f)
+        return apps_config.get("apps", [])
+    except FileNotFoundError:
+        logging.error("config/apps.yaml not found", exc_info=True)
+        raise HTTPException(status_code=404, detail="config/apps.yaml not found")
+    except yaml.YAMLError as e:
+        logging.error(f"Error parsing config/apps.yaml: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error parsing config/apps.yaml: {e}")
+
+@app.post("/api/transcript")
+async def post_transcript(request_body: TranscriptRequest):
+    app_data = request_body.app.dict() # Convert Pydantic model to dict
+    app_name = app_data.get('name', 'unknown_app')
+    logging.info(f"Received request for transcript generation for app: {app_name}")
 
     try:
-        # Run the async generate_transcript function using asyncio.run
-        # This blocks the current thread until the async function completes.
-        transcript, source_context = asyncio.run(generate_transcript(app_data))
-        return jsonify({
+        transcript, source_context = await generate_transcript(app_data)
+        return {
             "transcript": transcript,
             "source_context": source_context
-        })
+        }
     except Exception as e:
-        app.logger.error(f"Error generating transcript for app {app_data.get('name')}: {e}", exc_info=True)
-        return jsonify({"error": "Internal server error during transcript generation", "details": str(e)}), 500
+        logging.error(f"Error generating transcript for app {app_name}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal server error during transcript generation: {e}")
 
-if __name__ == '__main__':
-    # When running directly with `python api/main.py`
-    # This will run Flask's built-in WSGI development server.
-    app.run(debug=True, port=5000)
-    # To run with uvicorn, you would typically use:
-    # uvicorn api.main:app_asgi --host 0.0.0.0 --port 8000 --reload
+@app.post("/api/generate-mp3")
+async def generate_mp3_endpoint(request_body: Mp3GenerateRequest):
+    app_name = request_body.name
+    transcript = request_body.transcript
+    logging.info(f"Received request to generate MP3 for app: {app_name}")
+
+    try:
+        # Generate a unique base filename for the MP3
+        filename_base = f"{app_name.lower().replace(' ', '_').replace('-', '_')}_{os.urandom(4).hex()}.mp3"
+        
+        # Call TTS agent. text_to_mp3 saves to its internal 'output' directory.
+        # It returns the full path where it saved the file.
+        full_local_mp3_path = text_to_mp3(transcript, filename_base)
+        
+        # Upload to GCS
+        gcs_path = upload_to_gcs(full_local_mp3_path)
+
+        # Clean up local file
+        os.remove(full_local_mp3_path)
+        logging.info(f"Cleaned up local MP3 file: {full_local_mp3_path}")
+
+        return {
+            "local_file_name": filename_base, # Return just the name for simplicity
+            "gcs_path": gcs_path
+        }
+    except Exception as e:
+        logging.error(f"Error generating or uploading MP3 for app {app_name}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal server error during MP3 generation: {e}")
+
+@app.post("/api/generate-video")
+async def generate_video_endpoint():
+    logging.info("Received request for video generation (not yet implemented).")
+    return {"status": "not_implemented", "message": "Video generation will be added after MP3 flow works"}
