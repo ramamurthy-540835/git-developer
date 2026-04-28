@@ -1,0 +1,7 @@
+playwright==1.43.0
+beautifulsoup4==4.12.3
+Flask==3.0.3
+python-dotenv==1.0.1
+google-generativeai # Added because agents/llm.py uses it
+# If using `agents/llm.py` from Google Cloud's Vertex AI SDK:
+# google-cloud-aiplatform # Add if llm.py uses this directly and it's not present
