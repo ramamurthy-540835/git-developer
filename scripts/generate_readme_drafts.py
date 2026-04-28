@@ -220,12 +220,13 @@ def main():
         sys.exit(1)
 
     # Validate arguments
-    if args.publish and args.dry_run:
-        parser.error("Cannot use --publish and --dry-run simultaneously.")
-    if args.all and args.publish and not args.yes:
-        parser.error("--all --publish requires --yes to confirm bulk publishing.")
-    if args.publish and not os.environ.get("GITHUB_TOKEN"):
-        parser.error("--publish requires GITHUB_TOKEN environment variable to be set in .env.local.")
+    # --dry-run can be used with --publish to simulate the action
+    if args.all and args.publish and not args.yes and not args.dry_run:
+        parser.error("--all --publish requires --yes to confirm bulk publishing (unless --dry-run is used).")
+    
+    # GITHUB_TOKEN is only required for actual publishing, not dry runs
+    if args.publish and not args.dry_run and not os.environ.get("GITHUB_TOKEN"):
+        parser.error("--publish (without --dry-run) requires GITHUB_TOKEN environment variable to be set in .env.local.")
 
     # Initialize report
     report = {
