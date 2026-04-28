@@ -47,14 +47,17 @@ app.add_middleware(
 # Pydantic models for request bodies
 class AppData(BaseModel):
     name: str
-    url: Optional[str] = None # Make URL optional as repo_url can be used
-    repo_url: Optional[str] = None # New: for GitHub repo context
-    title: Optional[str] = None
+    full_name: str # The owner/repo string
+    repo_url: str
+    url: Optional[str] = None # Keeping for backward compatibility if needed, but not primary
     description: Optional[str] = None
+    language: Optional[str] = None
+    private: Optional[bool] = None
+    updated_at: Optional[str] = None
     tags: Optional[List[str]] = None
 
 class TranscriptRequest(BaseModel):
-    app: AppData
+    app: AppData # This will contain the full repo details from repos.yaml
 
 class Mp3GenerateRequest(BaseModel):
     name: str
@@ -65,43 +68,43 @@ class Mp3GenerateRequest(BaseModel):
 async def health_check():
     return {"status": "ok"}
 
-@app.get("/api/apps")
-async def get_all_apps():
+@app.get("/api/repos")
+async def get_all_repos():
     """
-    Reads config/apps.yaml and returns the list of all configured applications.
+    Reads config/repos.yaml and returns the list of all configured repositories.
     """
     try:
-        with open("config/apps.yaml", "r") as f:
-            apps_config = yaml.safe_load(f)
-        return apps_config.get("apps", [])
+        with open("config/repos.yaml", "r") as f:
+            repos_config = yaml.safe_load(f)
+        return {"repos": repos_config.get("repos", [])}
     except FileNotFoundError:
-        logging.error("config/apps.yaml not found", exc_info=True)
-        raise HTTPException(status_code=404, detail="Application configuration file not found.")
+        logging.error("config/repos.yaml not found", exc_info=True)
+        raise HTTPException(status_code=404, detail="Repository configuration file not found.")
     except yaml.YAMLError as e:
-        logging.error(f"Error parsing config/apps.yaml: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error parsing application configuration: {e}")
+        logging.error(f"Error parsing config/repos.yaml: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error parsing repository configuration: {e}")
 
-@app.get("/api/apps/{app_name}")
-async def get_app_by_name(app_name: str):
+@app.get("/api/repos/{owner_repo:path}")
+async def get_repo_by_full_name(owner_repo: str):
     """
-    Reads config/apps.yaml and returns details for a specific application by name.
+    Reads config/repos.yaml and returns details for a specific repository by its full name (owner/repo).
     """
     try:
-        with open("config/apps.yaml", "r") as f:
-            apps_config = yaml.safe_load(f)
-        apps = apps_config.get("apps", [])
+        with open("config/repos.yaml", "r") as f:
+            repos_config = yaml.safe_load(f)
+        repos = repos_config.get("repos", [])
         
-        for app_data in apps:
-            if app_data.get("name") == app_name:
-                return app_data
+        for repo_data in repos:
+            if repo_data.get("full_name") == owner_repo:
+                return repo_data
         
-        raise HTTPException(status_code=404, detail=f"Application '{app_name}' not found.")
+        raise HTTPException(status_code=404, detail=f"Repository '{owner_repo}' not found.")
     except FileNotFoundError:
-        logging.error("config/apps.yaml not found", exc_info=True)
-        raise HTTPException(status_code=404, detail="Application configuration file not found.")
+        logging.error("config/repos.yaml not found", exc_info=True)
+        raise HTTPException(status_code=404, detail="Repository configuration file not found.")
     except yaml.YAMLError as e:
-        logging.error(f"Error parsing config/apps.yaml: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error parsing application configuration: {e}")
+        logging.error(f"Error parsing config/repos.yaml: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error parsing repository configuration: {e}")
 
 @app.post("/api/repo-context")
 async def get_repository_context_endpoint(request_body: RepoContextRequest):
