@@ -73,15 +73,14 @@ def generate_readme_content(repo_metadata: Dict[str, Any], github_repo_context: 
         f"## Overview",
         f"## Business Problem",
         f"## Key Capabilities",
-        f"## Architecture",
         f"## Tech Stack",
         f"## Repository Structure",
         f"## Local Setup",
         f"## Deployment",
         f"## Demo Workflow",
         f"## Future Enhancements",
-        f"\nIMPORTANT: Do NOT generate any form of diagrams, including Mermaid. Strictly use plain Markdown bullet lists, numbered lists, or simple ASCII text for architecture flows or any other diagrams. Specifically, avoid syntax like 'Node[Label]' or similar diagram-node representations. For architecture, a numbered list clearly describing the flow is preferred.",
-        f"\nUse the following information to populate the sections:",
+        f"\nIMPORTANT: The 'Architecture' section will be added programmatically with a Mermaid diagram or a bullet list. Do not generate it here.",
+        f"\nUse the following information to populate the sections (excluding Architecture):",
         f"Project Name: {repo_name}",
         f"Full GitHub Name: {full_name}",
         f"GitHub URL: {repo_url}",
@@ -157,33 +156,37 @@ def publish_readme_to_github(
     }
     commit_message = "docs: add project README"
 
-    logging.debug(f"Attempting to publish README to {full_github_repo}/{branch} (dry_run={dry_run})")
+    logging.debug(f"Attempting to publish {file_path_str} to {full_github_repo}/{branch} (dry_run={dry_run})")
 
     if dry_run:
-        logging.info(f"DRY RUN: Would publish/update README for '{full_github_repo}' on branch '{branch}'.")
-        return {"status": "DRY_RUN_SUCCESS"}
+        logging.info(f"DRY RUN: Would publish/update '{file_path_str}' for '{full_github_repo}' on branch '{branch}'.")
+        return {"status": "DRY_RUN_SUCCESS", "file_path": file_path_str}
 
     sha = None
+    action_performed = "created" # Default to created
+    
     try:
-        # Check if README.md exists to get its SHA
+        # Check if file exists to get its SHA
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
             file_data = response.json()
             sha = file_data['sha']
-            logging.debug(f"README.md exists for '{full_github_repo}', SHA: {sha}")
-            commit_message = "docs: update project README"
+            logging.debug(f"'{file_path_str}' exists for '{full_github_repo}', SHA: {sha}")
+            commit_message_action = "update"
+            commit_message = f"{commit_message_type}: {commit_message_action} {file_path_str}"
+            action_performed = "updated"
         elif response.status_code == 404:
-            logging.debug(f"README.md does not exist for '{full_github_repo}'. Will create.")
-            commit_message = "docs: add project README"
+            logging.debug(f"'{file_path_str}' does not exist for '{full_github_repo}'. Will create.")
+            # commit_message already set for 'add' or 'create'
         else:
             response.raise_for_status() # Raise for other HTTP errors
 
     except requests.exceptions.RequestException as e:
-        logging.error(f"Failed to check existing README for '{full_github_repo}': {e}")
-        return {"status": "FAILED", "reason": f"API check failed: {e}"}
+        logging.error(f"Failed to check existing '{file_path_str}' for '{full_github_repo}': {e}")
+        return {"status": "FAILED", "file_path": file_path_str, "reason": f"API check failed: {e}"}
 
     # Prepare content for PUT request
-    encoded_content = base64.b64encode(readme_content.encode('utf-8')).decode('utf-8')
+    encoded_content = base64.b64encode(file_content.encode('utf-8')).decode('utf-8')
     payload = {
         "message": commit_message,
         "content": encoded_content,
@@ -196,24 +199,23 @@ def publish_readme_to_github(
         response = requests.put(url, headers=headers, json=payload)
         response.raise_for_status() # Raise for HTTP errors (4xx or 5xx)
         
-        action = "updated" if sha else "created"
-        logging.info(f"Successfully {action} README for '{full_github_repo}' on branch '{branch}'.")
-        return {"status": "SUCCESS", "action": action}
+        logging.info(f"Successfully {action_performed} '{file_path_str}' for '{full_github_repo}' on branch '{branch}'.")
+        return {"status": "SUCCESS", "action": action_performed, "file_path": file_path_str}
 
     except requests.exceptions.HTTPError as e:
         error_details = e.response.json().get('message', str(e))
-        logging.error(f"Failed to publish README for '{full_github_repo}': HTTPError {e.response.status_code} - {error_details}")
-        return {"status": "FAILED", "reason": f"HTTPError {e.response.status_code}: {error_details}"}
+        logging.error(f"Failed to publish '{file_path_str}' for '{full_github_repo}': HTTPError {e.response.status_code} - {error_details}")
+        return {"status": "FAILED", "file_path": file_path_str, "reason": f"HTTPError {e.response.status_code}: {error_details}"}
     except requests.exceptions.RequestException as e:
-        logging.error(f"Failed to publish README for '{full_github_repo}': {e}")
-        return {"status": "FAILED", "reason": f"API PUT failed: {e}"}
+        logging.error(f"Failed to publish '{file_path_str}' for '{full_github_repo}': {e}")
+        return {"status": "FAILED", "file_path": file_path_str, "reason": f"API PUT failed: {e}"}
     except Exception as e:
-        logging.error(f"An unexpected error occurred during publishing for '{full_github_repo}': {e}", exc_info=True)
-        return {"status": "FAILED", "reason": f"Unexpected error: {type(e).__name__} - {e}"}
+        logging.error(f"An unexpected error occurred during publishing '{file_path_str}' for '{full_github_repo}': {e}", exc_info=True)
+        return {"status": "FAILED", "file_path": file_path_str, "reason": f"Unexpected error: {type(e).__name__} - {e}"}
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate and optionally publish README drafts for GitHub repositories using Gemini.")
-    parser.add_argument("--repo", type=str, help="Generate/publish README for a specific repo by its full name (e.g., owner/repo).")
+    parser = argparse.ArgumentParser(description="Generate and optionally publish README drafts and architecture diagrams for GitHub repositories using Gemini.")
+    parser.add_argument("--repo", type=str, help="Generate/publish for a specific repo by its full name (e.g., owner/repo).")
     parser.add_argument("--all", action="store_true", help="Generate/publish READMEs for all relevant repos in config/repos.yaml.")
     parser.add_argument("--force", action="store_true", help="Overwrite existing local generated READMEs.")
     parser.add_argument("--limit", type=int, default=0, help="Limit the number of repositories to process when --all is used.")
@@ -254,14 +256,12 @@ def main():
     report = {
         "generated_locally": [],
         "skipped_local": [],
-        "published_created": [],
-        "published_updated": [],
+        "published_files": [], # To store all published files (readme, mmd, html)
         "failed": [],
         "summary": {
             "generated_locally_count": 0, 
             "skipped_local_count": 0, 
-            "published_created_count": 0,
-            "published_updated_count": 0,
+            "published_count": 0, # Total published files (any type)
             "failed_count": 0
         }
     }
@@ -311,137 +311,210 @@ def main():
 
         logging.info(f"Processing '{full_name}'...")
 
-        # Initialize content generation status and output file info
+        # Derive owner and repo_name for file paths
+        owner_name_match = re.match(r"([^/]+)/([^/]+)", full_name)
+        if not owner_name_match:
+            logging.error(f"Invalid full_name format '{full_name}'. Skipping.")
+            report["failed"].append({"full_name": full_name, "reason": "Invalid full_name format"})
+            report["summary"]["failed_count"] += 1
+            continue
+        owner, repo_name = owner_name_match.groups()
+
+        output_repo_dir = Path("generated_readmes") / owner / repo_name
+        output_repo_dir.mkdir(parents=True, exist_ok=True)
+
+        readme_output_file = output_repo_dir / "README.md"
+        docs_dir = output_repo_dir / "docs"
+        docs_dir.mkdir(parents=True, exist_ok=True)
+        mermaid_output_file = docs_dir / "architecture.mmd"
+        html_output_file = docs_dir / "architecture.html"
+
+        # Initialize content variables
         readme_content = ""
-        local_readme_exists = output_file.exists()
-        generated_new_content_locally = False # Flag to track if Gemini was called and saved locally
-        
-        # Determine if we need to generate new content or use existing local
-        if local_readme_exists and not args.force:
+        mermaid_content = ""
+        html_content = ""
+        architecture_flow_bullet_list = "" # Fallback for README
+
+        # --- Phase 1: Determine if README content needs generation or uses existing ---
+        generated_new_readme_locally = False
+        if readme_output_file.exists() and not args.force:
             if args.publish:
                 # If local README exists, not forcing, but publishing, read existing local content
                 try:
-                    with open(output_file, "r") as f:
+                    with open(readme_output_file, "r") as f:
                         readme_content = f.read()
-                    logging.info(f"SKIP generation: Using existing local README for '{full_name}' for publishing.")
-                    report["skipped_local"].append({"full_name": full_name, "reason": "Using existing local for publish"})
+                    logging.info(f"SKIP README generation: Using existing local README for '{full_name}' for publishing.")
+                    # Also read existing architecture files if they exist for publishing
+                    if mermaid_output_file.exists():
+                        with open(mermaid_output_file, "r") as f:
+                            mermaid_content = f.read()
+                    if html_output_file.exists():
+                        with open(html_output_file, "r") as f:
+                            html_content = f.read()
+
+                    report["skipped_local"].append({"full_name": full_name, "file": "README.md", "reason": "Using existing local for publish"})
                     report["summary"]["skipped_local_count"] += 1
                 except Exception as e:
-                    logging.error(f"Failed to read existing local README for '{full_name}': {e}", exc_info=True)
-                    report["failed"].append({"full_name": full_name, "reason": f"Failed to read existing local README: {e}"})
+                    logging.error(f"Failed to read existing local README/architecture files for '{full_name}': {e}", exc_info=True)
+                    report["failed"].append({"full_name": full_name, "reason": f"Failed to read existing local files: {e}"})
                     report["summary"]["failed_count"] += 1
                     continue # Cannot proceed without content
             else:
                 # If local exists, not forcing, and not publishing, skip completely
-                logging.info(f"SKIP existing: README for '{full_name}' already exists at '{output_file}' (use --force to overwrite or --publish to publish existing).")
-                report["skipped_local"].append({"full_name": full_name, "reason": "README exists, skipping"})
+                logging.info(f"SKIP existing: README for '{full_name}' already exists at '{readme_output_file}' (use --force to overwrite or --publish to publish existing).")
+                report["skipped_local"].append({"full_name": full_name, "file": "README.md", "reason": "README exists, skipping"})
                 report["summary"]["skipped_local_count"] += 1
                 continue # Skip to next repo
         
-        # If readme_content is not yet available (meaning we need to generate it)
-        if not readme_content:
-            # Get GitHub token safely (only relevant for agent itself, not publishing here)
+        # --- Phase 2: Generate new content if not using existing local ---
+        if not readme_content: # Means we need to generate README and architecture diagrams
+            logging.info(f"Generating new README and architecture files for '{full_name}'.")
+
+            # Get GitHub token safely for agent
             github_token_for_agent = os.environ.get("GITHUB_TOKEN") 
             if not github_token_for_agent and github_reader_agent:
                  logging.warning(f"GITHUB_TOKEN not set for '{full_name}'. GitHub reader agent may not function correctly.")
-
-            # Try to extract owner and repo name from full_name for GitHub API
-            owner_name_match = re.match(r"([^/]+)/([^/]+)", full_name)
-            if not owner_name_match:
-                logging.error(f"Invalid full_name format '{full_name}'. Skipping.")
-                report["failed"].append({"full_name": full_name, "reason": "Invalid full_name format"})
-                report["summary"]["failed_count"] += 1
-                continue
-            owner, repo_name = owner_name_match.groups()
-
+            
             github_repo_context = None
             if github_reader_agent: # Only attempt if agent was loaded successfully
                 try:
                     github_repo_context = github_reader_agent(repo_url)
                     if "Error" in github_repo_context.get("name", ""):
-                        logging.warning(f"Could not fetch GitHub repo context for {full_name}: {github_repo_context.get('description', '')}. Generating README from metadata only.")
+                        logging.warning(f"Could not fetch GitHub repo context for {full_name}: {github_repo_context.get('description', '')}. Generating content from metadata only.")
                         github_repo_context = None
                 except Exception as e:
-                    logging.warning(f"Failed to get GitHub repo context for {full_name}: {e}. Generating README from metadata only.", exc_info=True)
+                    logging.warning(f"Failed to get GitHub repo context for {full_name}: {e}. Generating content from metadata only.", exc_info=True)
                     github_repo_context = None
             else:
-                logging.info(f"GitHub reader agent not available. Generating README for {full_name} from metadata only.")
+                logging.info(f"GitHub reader agent not available. Generating content for {full_name} from metadata only.")
             
+            # --- Generate README.md base content ---
             retries = 3
             for i in range(retries):
                 try:
                     readme_content = generate_readme_content(repo_metadata, github_repo_context)
                     if readme_content:
-                        generated_new_content_locally = True # Mark as newly generated
-                        break # Success, exit retry loop
+                        break
                 except Exception as e:
-                    logging.warning(f"Gemini generation attempt {i+1}/{retries} failed for '{full_name}': {e}. Retrying in 5 seconds...")
+                    logging.warning(f"Gemini README generation attempt {i+1}/{retries} failed for '{full_name}': {e}. Retrying in 5 seconds...")
                     time.sleep(5) # Wait before retrying
             
             if not readme_content:
-                logging.error(f"Failed to generate content for README for '{full_name}' after {retries} attempts.")
-                report["failed"].append({"full_name": full_name, "reason": "Failed to generate content from Gemini"})
+                logging.error(f"Failed to generate base README content for '{full_name}' after {retries} attempts.")
+                report["failed"].append({"full_name": full_name, "file": "README.md", "reason": "Failed to generate content from Gemini"})
                 report["summary"]["failed_count"] += 1
-                continue # Cannot proceed without content
+                continue # Cannot proceed without README content
+
+            # --- Generate Architecture Diagram components ---
+            architecture_steps = []
+            for i in range(retries):
+                try:
+                    architecture_steps = get_architecture_flow_steps_from_llm(repo_metadata, github_repo_context)
+                    if architecture_steps:
+                        break
+                except Exception as e:
+                    logging.warning(f"Gemini architecture flow generation attempt {i+1}/{retries} failed for '{full_name}': {e}. Retrying in 5 seconds...")
+                    time.sleep(5) # Wait before retrying
             
-            # Save newly generated content locally
+            if architecture_steps:
+                mermaid_content = steps_to_mermaid(architecture_steps)
+                if mermaid_content:
+                    html_content = generate_architecture_html(mermaid_content, repo_name)
+                    logging.info(f"Generated architecture diagram for '{full_name}'.")
+                else:
+                    logging.warning(f"Mermaid content generation failed for '{full_name}'. Falling back to bullet list.")
+                    architecture_flow_bullet_list = "\n" + "\n".join([f"* {step}" for step in architecture_steps]) + "\n"
+            else:
+                logging.warning(f"Failed to generate architecture flow steps from Gemini for '{full_name}' after {retries} attempts. Falling back to simple placeholder.")
+                architecture_flow_bullet_list = "\n* Architecture flow steps could not be generated. Please review the project manually.\n"
+            
+            # --- Insert Architecture section into README content ---
+            architecture_section_markdown = "\n## Architecture\n\n"
+            if mermaid_content:
+                architecture_section_markdown += "```mermaid\n"
+                architecture_section_markdown += mermaid_content
+                architecture_section_markdown += "\n```\n"
+                architecture_section_markdown += f"\nFor a standalone preview, see [docs/architecture.html](docs/architecture.html).\n"
+            else:
+                architecture_section_markdown += architecture_flow_bullet_list
+
+            # Find a suitable place to insert, e.g., before 'Tech Stack' or at the end
+            # We defined the prompt *not* to include "## Architecture", so we just append it.
+            readme_content += architecture_section_markdown
+            
+            generated_new_readme_locally = True # Mark as newly generated
+
+            # --- Save all generated content locally ---
             try:
-                with open(output_file, "w") as f:
+                with open(readme_output_file, "w") as f:
                     f.write(readme_content)
-                logging.info(f"Generated local README for '{full_name}' at '{output_file}'.")
-                report["generated_locally"].append({"full_name": full_name, "path": str(output_file)})
+                logging.info(f"Generated local README for '{full_name}' at '{readme_output_file}'.")
+                report["generated_locally"].append({"full_name": full_name, "file": "README.md", "path": str(readme_output_file)})
                 report["summary"]["generated_locally_count"] += 1
+
+                if mermaid_content:
+                    with open(mermaid_output_file, "w") as f:
+                        f.write(mermaid_content)
+                    logging.info(f"Generated local Mermaid diagram for '{full_name}' at '{mermaid_output_file}'.")
+                    report["generated_locally"].append({"full_name": full_name, "file": "architecture.mmd", "path": str(mermaid_output_file)})
+                    report["summary"]["generated_locally_count"] += 1
+
+                    with open(html_output_file, "w") as f:
+                        f.write(html_content)
+                    logging.info(f"Generated local HTML preview for '{full_name}' at '{html_output_file}'.")
+                    report["generated_locally"].append({"full_name": full_name, "file": "architecture.html", "path": str(html_output_file)})
+                    report["summary"]["generated_locally_count"] += 1
             except Exception as e:
-                logging.error(f"Failed to save local README for '{full_name}' to '{output_file}': {e}", exc_info=True)
-                report["failed"].append({"full_name": full_name, "reason": f"Failed to save local file: {e}"})
+                logging.error(f"Failed to save local files for '{full_name}': {e}", exc_info=True)
+                report["failed"].append({"full_name": full_name, "reason": f"Failed to save local files: {e}"})
                 report["summary"]["failed_count"] += 1
                 continue # If local save fails, don't attempt to publish
 
-        # At this point, readme_content holds valid content (either freshly generated and saved, or read from existing local file).
-        # And if it was freshly generated, it's already saved locally.
+        # --- Phase 3: Optionally publish to GitHub ---
+        if args.publish: 
+            github_token = os.environ.get("GITHUB_TOKEN") # Get GitHub token specifically for publishing
 
-        # Now, optionally publish to GitHub
-        if args.publish and readme_content: 
-            # Re-extract owner/repo for publish_readme_to_github as owner/repo_name are only available in this scope
-            owner_name_match = re.match(r"([^/]+)/([^/]+)", full_name)
-            if not owner_name_match: # Should ideally not happen if it passed earlier check
-                logging.error(f"Internal error: Invalid full_name format '{full_name}' during publish. Skipping publish.")
-                report["failed"].append({"full_name": full_name, "reason": "Internal error: Invalid full_name format for publish"})
-                report["summary"]["failed_count"] += 1
-                continue
-            owner, repo_name = owner_name_match.groups()
+            files_to_publish = []
+            if readme_content:
+                files_to_publish.append({"path": readme_output_file, "content": readme_content})
+            if mermaid_content:
+                files_to_publish.append({"path": mermaid_output_file, "content": mermaid_content})
+            if html_content:
+                files_to_publish.append({"path": html_output_file, "content": html_content})
 
-            # Get GitHub token specifically for publishing
-            github_token = os.environ.get("GITHUB_TOKEN") 
+            for file_info in files_to_publish:
+                file_path = file_info["path"]
+                file_content = file_info["content"]
 
-            publish_result = publish_readme_to_github(
-                owner, repo_name, readme_content, github_token, args.branch, args.dry_run
-            )
-            if publish_result["status"] == "SUCCESS":
-                if publish_result["action"] == "created":
-                    report["published_created"].append({"full_name": full_name, "path": str(output_file)})
-                    report["summary"]["published_created_count"] += 1
-                elif publish_result["action"] == "updated":
-                    report["published_updated"].append({"full_name": full_name, "path": str(output_file)})
-                    report["summary"]["published_updated_count"] += 1
-            elif publish_result["status"] == "DRY_RUN_SUCCESS":
-                logging.info(f"DRY RUN: README for '{full_name}' would have been published.")
-                # For dry run, we don't update counts for created/updated
-            else: # FAILED
-                report["failed"].append({"full_name": full_name, "reason": f"GitHub publish failed: {publish_result.get('reason', 'Unknown error')}"})
-                report["summary"]["failed_count"] += 1
-        # else: if args.publish is false, nothing happens here.
+                publish_result = publish_file_to_github(
+                    owner, repo_name, file_path.relative_to(output_repo_dir), file_content, github_token, args.branch, args.dry_run
+                )
+                if publish_result["status"] == "SUCCESS":
+                    report["published_files"].append({
+                        "full_name": full_name, 
+                        "file": publish_result["file_path"], 
+                        "action": publish_result["action"]
+                    })
+                    report["summary"]["published_count"] += 1
+                elif publish_result["status"] == "DRY_RUN_SUCCESS":
+                    logging.info(f"DRY RUN: '{publish_result['file_path']}' for '{full_name}' would have been published.")
+                else: # FAILED
+                    report["failed"].append({
+                        "full_name": full_name, 
+                        "file": publish_result["file_path"], 
+                        "reason": f"GitHub publish failed: {publish_result.get('reason', 'Unknown error')}"
+                    })
+                    report["summary"]["failed_count"] += 1
 
     # Save final report
     with open(report_file_path, "w") as f:
         json.dump(report, f, indent=2)
 
-    print("\n--- README Generation Report ---")
-    print(f"Locally Generated: {report['summary']['generated_locally_count']}")
-    print(f"Locally Skipped (exists): {report['summary']['skipped_local_count']}")
-    print(f"Published (Created on GitHub): {report['summary']['published_created_count']}")
-    print(f"Published (Updated on GitHub): {report['summary']['published_updated_count']}")
-    print(f"Total Failed: {report['summary']['failed_count']}")
+    print("\n--- Generation and Publish Report ---")
+    print(f"Locally Generated Files: {report['summary']['generated_locally_count']}")
+    print(f"Locally Skipped Files (exists): {report['summary']['skipped_local_count']}")
+    print(f"Published Files to GitHub: {report['summary']['published_count']}")
+    print(f"Total Failed Operations: {report['summary']['failed_count']}")
     print(f"Full report saved to: {report_file_path}")
 
 if __name__ == "__main__":
