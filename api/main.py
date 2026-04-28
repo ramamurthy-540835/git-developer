@@ -78,13 +78,18 @@ async def post_transcript(request_body: TranscriptRequest):
     logging.info(f"Received request for transcript generation for app: {app_name}")
 
     try:
-        transcript, source_context = await generate_transcript(app_data)
-        return {
+        transcript, source_context, warning_message = await generate_transcript(app_data)
+        response_data = {
             "transcript": transcript,
             "source_context": source_context
         }
+        if warning_message:
+            response_data["warning"] = warning_message
+        return response_data
     except Exception as e:
         logging.error(f"Error generating transcript for app {app_name}: {e}", exc_info=True)
+        # If an unhandled exception occurs before generate_transcript returns,
+        # or if generate_transcript itself throws, catch it here.
         raise HTTPException(status_code=500, detail=f"Internal server error during transcript generation: {e}")
 
 @app.post("/api/generate-mp3")

@@ -177,14 +177,8 @@ export default function EditorPage() {
             {sourceContext.url && sourceContext.headings.length === 0 && sourceContext.buttons.length === 0 && sourceContext.cards.length === 0 && sourceContext.tables.length === 0 && (
                 <p className="text-sm text-gray-500 mt-2">No specific visible content (headings, buttons, cards, tables) found on the page.</p>
             )}
-            {
-              // Check if transcript contains a warning message indicating URL content could not be read.
-              transcript.startsWith("[WARNING:") && (
-                <p className="text-sm text-yellow-600 mt-2 font-medium">
-                  {transcript.split('\n')[0].replace("[WARNING: ", "").replace("]", "")}
-                </p>
-              )
-            }
+            {/* If there's an error from the backend, it will be displayed by the main error alert.
+                This section now shows only context, not the warning message itself. */}
           </div>
         )}
       </div>

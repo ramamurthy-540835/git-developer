@@ -1,20 +1,30 @@
 apps:
   - name: vbc_dashboard
     url: https://vbc-dashboard-1035117862188.us-central1.run.app
-    description: Value Based Care dashboard with risk stratification and care insights
+    title: Value-Based Care Dashboard
+    description: A comprehensive healthcare analytics dashboard designed for value-based care programs. It provides real-time insights into patient population risk, identifies high-risk cohorts, highlights care gaps, tracks key quality measures, monitors utilization patterns, supports care management actions, evaluates provider performance, and presents executive-level KPIs. This platform empowers care teams to prioritize interventions, improve patient outcomes, reduce avoidable utilization, and effectively manage both payer and provider performance within value-based contracts.
+    tags: [healthcare, value-based-care, risk-stratification, care-gaps, quality-measures, population-health, AI-insights, care-management, provider-performance, executive-reporting]
 
   - name: weathernext_dashboard
     url: https://weathernext-dashboard-1035117862188.us-central1.run.app
-    description: AI weather forecasting and climate intelligence platform
+    title: WeatherNext AI Intelligence Platform
+    description: An advanced AI weather forecasting and climate intelligence platform offering granular predictions and actionable insights. Features include a dynamic 3D globe visualization, auto-rotating views, real-time alert scans for environmental dangers, detailed 15-day forecasts, ensemble modeling, and city-specific data. Users can interact with a conversational AI for deeper analysis, export data, and access decision briefs for critical operations.
+    tags: [AI, weather-forecasting, climate-intelligence, geospatial, 3D-visualization, alerts, data-analytics, enterprise, decision-support]
 
   - name: adept_healthcare
     url: https://adept-healthcare-vbc-pa-frontend-1035117862188.us-central1.run.app
-    description: Prior authorization + VBC healthcare platform
+    title: Adept Healthcare VBC & Prior Authorization Platform
+    description: A cutting-edge healthcare platform integrating Value-Based Care (VBC) management with streamlined Prior Authorization workflows. It features a critical risk network, population intelligence, AI-predicted risk trends, and personalized AI recommendations for clinical ops, physicians, care managers, and finance directors. The platform offers a 4D Data Fabric for granular patient data analysis (patient_id, icd10_code, facility_name, risk_score) with configurable dimensions and filters, and a system summary of pending actions, graph connections, and data quality health scores. Powered by BigQuery, Gemini, and GCP.
+    tags: [healthcare, prior-authorization, value-based-care, AI, risk-management, data-fabric, patient-management, clinical-intelligence, population-health, BigQuery, Gemini, GCP]
 
   - name: dataeng_console
     url: https://dataeng-console-1035117862188.us-central1.run.app
-    description: Data engineering pipelines and analytics console
+    title: Data Engineering & Analytics Console
+    description: A robust console for managing end-to-end data engineering pipelines and advanced analytics. It provides a centralized interface for monitoring data ingestion, transformation, and storage processes, visualizing data lineage, and performing ad-hoc queries. The platform supports automated pipeline orchestration, data quality monitoring, and integration with various data sources and destinations to ensure reliable and high-performance data operations for enterprise data teams.
+    tags: [data-engineering, analytics, data-pipelines, data-governance, data-quality, monitoring, enterprise, cloud-native]
 
   - name: ctopteam_frontend
     url: https://ctopteam-frontend-1035117862188.us-central1.run.app
-    description: GenAI + modernization platform UI
+    title: GenAI & Modernization Platform UI
+    description: A user-friendly frontend for a GenAI and modernization platform, designed to accelerate digital transformation. This interface enables users to interact with generative AI models for content creation, leverage modernization tools for legacy system upgrades, and manage cloud-native applications. It features a streamlined workflow for AI-powered tasks, intelligent search capabilities, and customizable dashboards to monitor modernization progress and AI utilization.
+    tags: [GenAI, AI, modernization, digital-transformation, cloud-native, enterprise-UI, intelligent-automation]
