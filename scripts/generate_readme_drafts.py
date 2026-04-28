@@ -80,7 +80,7 @@ def generate_readme_content(repo_metadata: Dict[str, Any], github_repo_context: 
         f"## Deployment",
         f"## Demo Workflow",
         f"## Future Enhancements",
-        f"\nIMPORTANT: Do NOT generate Mermaid diagrams. Use plain Markdown bullet lists, numbered lists, or simple ASCII text for architecture flows or any other diagrams. For architecture, a numbered list describing the flow is preferred.",
+        f"\nIMPORTANT: Do NOT generate any form of diagrams, including Mermaid. Strictly use plain Markdown bullet lists, numbered lists, or simple ASCII text for architecture flows or any other diagrams. Specifically, avoid syntax like 'Node[Label]' or similar diagram-node representations. For architecture, a numbered list clearly describing the flow is preferred.",
         f"\nUse the following information to populate the sections:",
         f"Project Name: {repo_name}",
         f"Full GitHub Name: {full_name}",
