@@ -2,46 +2,71 @@ import os
 import logging
 import asyncio
 from agents.url_reader_agent import read_app_url
-from agents.llm import generate_script as call_llm_generate_script # Direct import now that agents/llm.py is available
+from agents.github_reader_agent import get_repo_context # New import
+from agents.llm import generate_script as call_llm_generate_script
 
 logging.basicConfig(level=logging.INFO)
 
-async def generate_transcript(app: dict) -> tuple[str, dict]:
+async def generate_transcript(app: dict) -> tuple[str, dict, str]:
     """
     Generates a voiceover-ready transcript for an application, incorporating
-    content read directly from the application's URL.
-    Returns the transcript string and a dictionary of source page context.
+    content read either from its GitHub repository or live URL.
+    Returns the transcript string, a dictionary of source context, and a warning message.
     """
     app_url = app.get("url")
+    repo_url = app.get("repo_url") # New: get repo_url
     app_name = app.get("name", "Unknown Application").replace('_', ' ').title()
     app_description = app.get("description", "No description provided.")
+    app_title = app.get("title", app_name) # Use 'title' from config if present
+    app_tags = app.get("tags", [])
 
-    source_context = {
+    source_context: Dict[str, Any] = {
+        "type": "N/A", # Will be "web_page" or "github_repo"
         "title": "N/A",
-        "url": app_url,
+        "url": app_url or repo_url, # Prioritize repo_url for context URL if available
         "headings": [],
         "buttons": [],
         "cards": [],
         "tables": [],
+        "repo_name": "N/A", # New: For GitHub context
+        "repo_description": "N/A", # New: For GitHub context
+        "readme_preview": "N/A", # New: For GitHub context
+        "tech_stack": [], # New: For GitHub context
+        "detected_features": [] # New: For GitHub context
     }
-    url_read_successful = False
+    content_read_successful = False
     warning_message = ""
-    page_content = {}
+    extracted_content: Dict[str, Any] = {} # This will hold either page_content or repo_context
 
-    if app_url:
+    if repo_url:
+        logging.info(f"Attempting to read GitHub repo context for {app_name} from {repo_url}")
+        extracted_content = get_repo_context(repo_url) # Synchronous call, as GitHub API client is sync
+        source_context["type"] = "github_repo"
+        source_context["url"] = repo_url
+        source_context["repo_name"] = extracted_content.get("name", "N/A")
+        source_context["repo_description"] = extracted_content.get("description", "N/A")
+        source_context["readme_preview"] = extracted_content.get("readme", "No README content available.")
+        source_context["tech_stack"] = extracted_content.get("tech_stack", [])
+        source_context["detected_features"] = extracted_content.get("features", [])
+
+        if "Error" not in extracted_content.get("name", ""):
+            content_read_successful = True
+            logging.info(f"Successfully read GitHub repo context for {app_name}.")
+        else:
+            warning_message = f"GitHub repository content could not be fully read from {repo_url}. {extracted_content.get('description', '')} Transcript generated primarily from app metadata."
+            logging.warning(f"For {app_name}: {warning_message}")
+    elif app_url:
         logging.info(f"Reading URL content for {app_name} from {app_url}")
         page_content = await read_app_url(app_url)
-        
-        # Populate source_context with actual data, even if error occurred, to show error details
-        source_context = {
-            "title": page_content.get("title", "Error reading page"),
-            "url": page_content.get("url", app_url),
-            "headings": page_content.get("headings", []),
-            "buttons": page_content.get("buttons", []),
-            "cards": page_content.get("cards", []),
-            "tables": page_content.get("tables", []),
-        }
-        
+        extracted_content = page_content
+        source_context["type"] = "web_page"
+        source_context["title"] = page_content.get("title", "Error reading page")
+        source_context["url"] = page_content.get("url", app_url)
+        source_context["headings"] = page_content.get("headings", [])
+        source_context["buttons"] = page_content.get("buttons", [])
+        source_context["cards"] = page_content.get("cards", [])
+        source_context["tables"] = page_content.get("tables", [])
+
         # Check if URL reading was genuinely successful (no "Error" in title and some content)
         if "Error" not in page_content.get("title", "") and any([
             page_content.get("headings"),
@@ -50,18 +75,17 @@ async def generate_transcript(app: dict) -> tuple[str, dict]:
             page_content.get("tables"),
             page_content.get("raw_text")
         ]):
-            url_read_successful = True
+            content_read_successful = True
             logging.info(f"Successfully read URL content for {app_name}.")
         else:
             warning_message = "URL content could not be fully read or contained no relevant visible features. Transcript generated primarily from metadata."
             logging.warning(f"For {app_name}: {warning_message}")
     else:
-        warning_message = "Application URL not provided. Transcript generated from metadata only."
+        warning_message = "Application URL or Repository URL not provided. Transcript generated from metadata only."
         logging.warning(warning_message)
 
     # Construct the prompt for Gemini
     prompt_parts = []
-
     base_instruction = "Your task is to generate ONLY a compelling, voiceover-ready narration script for an enterprise application demo. " \
                        "The script MUST be between 60 to 90 seconds long when spoken and must maintain a professional, confident, and highly informative enterprise demo tone. " \
                        "STRICTLY adhere to these formatting rules: Do NOT include any introductory or concluding meta-commentary (e.g., 'Here is the transcript', 'Welcome to the demo'). " \
@@ -69,55 +93,64 @@ async def generate_transcript(app: dict) -> tuple[str, dict]:
                        "Focus entirely on explaining the application's features, benefits, and value proposition as if you are narrating a live demonstration. " \
                        "Crucially, DO NOT mention any technical issues, URL access problems, or script-writing instructions within the narration itself. " \
                        "Output ONLY the final voiceover narration."
-
     prompt_parts.append(base_instruction)
-
-    # Use enriched metadata for prompting
-    app_title = app.get("title", app_name) # Use 'title' from config if present
-    app_tags = app.get("tags", [])
 
     prompt_parts.append(f"\n\nApplication being demonstrated: {app_title}")
     prompt_parts.append(f"Primary purpose: {app_description}")
-    if app_url:
-        prompt_parts.append(f"Application URL: {app_url}")
     if app_tags:
         prompt_parts.append(f"Key themes/tags: {', '.join(app_tags)}")
 
-    # Specific guidance for VBC Dashboard
+    if content_read_successful:
+        if source_context["type"] == "github_repo":
+            prompt_parts.append(f"\n\nContext extracted from GitHub repository ({repo_url}):")
+            prompt_parts.append(f"Repository Name: {source_context['repo_name']}")
+            prompt_parts.append(f"Repository Description: {source_context['repo_description']}")
+            if source_context["tech_stack"]:
+                prompt_parts.append(f"Detected Technologies/Stack: {', '.join(source_context['tech_stack'])}")
+            if source_context["detected_features"]:
+                prompt_parts.append(f"Inferred Features/Capabilities: {', '.join(source_context['detected_features'])}")
+            if source_context["readme_preview"] and source_context["readme_preview"] != "No README.md found.":
+                prompt_parts.append(f"README.md Content Preview (for additional detail): {source_context['readme_preview']}")
+            # Instruct LLM to infer UI flows from code structure and readme
+            prompt_parts.append("Based on the repository context (README, files, tech stack, inferred features), describe the expected UI flows and functionalities of the application.")
+        elif source_context["type"] == "web_page":
+            prompt_parts.append(f"\n\nVisible elements from the live application page ({app_url}, integrate these naturally into the narration if relevant to features):")
+            if source_context["title"] and source_context["title"] != "Error reading page":
+                prompt_parts.append(f"Page Title: {source_context['title']}")
+            if source_context["headings"]:
+                prompt_parts.append(f"Visible Headings: {', '.join(source_context['headings'])}")
+            if source_context["buttons"]:
+                prompt_parts.append(f"Visible Buttons: {', '.join(source_context['buttons'])}")
+            if source_context["cards"]:
+                prompt_parts.append(f"Visible Card Titles/Sections: {', '.join(source_context['cards'])}")
+            if source_context["tables"]:
+                table_summaries = []
+                for table in source_context["tables"]:
+                    table_caption = f" (Caption: {table['caption']})" if table['caption'] else ""
+                    table_summaries.append(f"Table with headers: {', '.join(table['headers'])}{table_caption}")
+                prompt_parts.append(f"Visible Table Structures: {'; '.join(table_summaries)}")
+            if extracted_content.get("raw_text"):
+                prompt_parts.append(f"Snippet of raw visible page text (for additional context, filter strictly for relevance to features): {extracted_content['raw_text']}")
+    else:
+        # Fallback if no content could be read from either source
+        if repo_url and "Error" in extracted_content.get("name", ""):
+            prompt_parts.append(f"\n\nIMPORTANT: The GitHub repository at '{repo_url}' could not be fully accessed or yielded insufficient content. Generate narration based SOLELY on the provided application title, description, and key themes/tags. Do NOT mention the access issue in the final narration.")
+        elif app_url and "Error" in extracted_content.get("title", ""):
+            prompt_parts.append(f"\n\nIMPORTANT: The live application at '{app_url}' could not be fully accessed or yielded insufficient visible content. Generate narration based SOLELY on the provided application title, description, and key themes/tags. Do NOT mention the access issue in the final narration.")
+        else: # Generic case if neither URL nor Repo URL provided, or generic failure
+             prompt_parts.append("\n\nIMPORTANT: No external content (GitHub or URL) could be retrieved for this application. Generate the narration based SOLELY on the provided application title, description, and key themes/tags (domain knowledge).")
+
+    # Specific guidance for VBC Dashboard (after general content context)
     if app_name.lower().replace(' ', '_') == 'vbc_dashboard':
-        prompt_parts.append("\n\nFocus for VBC Dashboard narration:")
+        prompt_parts.append("\n\nFurther Focus for VBC Dashboard narration (integrate if consistent with above context):")
         prompt_parts.append("- Start by addressing the core business problem in healthcare value-based care.")
         prompt_parts.append("- Clearly explain the dashboard's purpose in solving this problem.")
-        prompt_parts.append("- Detail key features like risk stratification, identifying high-risk patients, highlighting care gaps, tracking quality measures, and supporting care management workflows. If specific buttons or headings for these are found in the URL content, mention them naturally.")
+        prompt_parts.append("- Detail key features like risk stratification, identifying high-risk patients, highlighting care gaps, tracking quality measures, and supporting care management workflows. If specific buttons or headings for these are found in the URL/repo content, mention them naturally.")
         prompt_parts.append("- Emphasize how the platform leverages AI for insights (as described in the metadata or observed).")
         prompt_parts.append("- Explain the value proposition for care managers, providers, executives, and payer teams.")
         prompt_parts.append("- Conclude with a strong statement about the business outcomes achieved.")
-        prompt_parts.append("- Prioritize using the provided detailed description and tags for domain knowledge. Do not hallucinate exact numbers unless present in the visible page content.")
+        prompt_parts.append("- Prioritize using the provided detailed description and tags for domain knowledge. Do not hallucinate exact numbers unless present in the visible page/repo content.")
 
-    # General guidance if URL content is available
-    if url_read_successful:
-        prompt_parts.append("\n\nVisible elements from the live application page (integrate these naturally into the narration if relevant to features):")
-        if source_context["title"] and source_context["title"] != "Error reading page":
-            prompt_parts.append(f"Page Title: {source_context['title']}")
-        if source_context["headings"]:
-            prompt_parts.append(f"Visible Headings: {', '.join(source_context['headings'])}")
-        if source_context["buttons"]:
-            prompt_parts.append(f"Visible Buttons: {', '.join(source_context['buttons'])}")
-        if source_context["cards"]:
-            prompt_parts.append(f"Visible Card Titles/Sections: {', '.join(source_context['cards'])}")
-        if source_context["tables"]:
-            table_summaries = []
-            for table in source_context["tables"]:
-                table_caption = f" (Caption: {table['caption']})" if table['caption'] else ""
-                table_summaries.append(f"Table with headers: {', '.join(table['headers'])}{table_caption}")
-            prompt_parts.append(f"Visible Table Structures: {'; '.join(table_summaries)}")
-        if page_content.get("raw_text"):
-            # Provide raw text but instruct the LLM to filter aggressively
-            prompt_parts.append(f"Snippet of raw visible page text (for additional context, filter strictly for relevance to features): {page_content['raw_text']}")
-    elif app_url and "Error" in page_content.get("title", ""):
-        # If URL content is weak or inaccessible, instruct the LLM to rely on metadata and domain knowledge.
-        # This instruction is *for the LLM*, not to be part of the final narration.
-        prompt_parts.append(f"\n\nIMPORTANT: The live application at '{app_url}' could not be fully accessed or yielded insufficient visible content. Therefore, generate the narration based SOLELY on the provided application title, description, and key themes/tags (domain knowledge). Do NOT mention the URL access issue in the final narration. IGNORE any content in the raw text that does not appear to be directly relevant to the application's core functionality or features, such as footers, navigation, or unrelated site embeds.")
 
     final_prompt = "\n".join(prompt_parts)
     logging.info(f"Sending prompt to LLM (first 500 chars):\n---\n{final_prompt[:500]}...\n---\n")
@@ -128,10 +161,7 @@ async def generate_transcript(app: dict) -> tuple[str, dict]:
     except Exception as e:
         logging.error(f"LLM failed to generate transcript: {e}", exc_info=True)
         transcript = f"An internal system error occurred while generating the transcript. Please try again."
-        # The warning message will be set below if it's due to URL read failure
-        if not warning_message: # If LLM failed, but URL was readable, then this is an LLM specific error.
+        if not warning_message: # If LLM failed, but content was readable, then this is an LLM specific error.
              warning_message = f"LLM generation failed: {str(e)}"
 
-
-    # Return the transcript, source context, and the warning message separately
     return transcript, source_context, warning_message

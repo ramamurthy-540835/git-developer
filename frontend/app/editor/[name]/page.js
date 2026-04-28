@@ -42,6 +42,28 @@ export default function EditorPage() {
         throw new Error(errorData.detail || `HTTP error! status: ${transcriptResponse.status}`);
       }
 
+      // First, fetch the specific app's details from the backend
+      const appDetailsResponse = await fetch(`http://10.100.15.44:8000/api/apps/${appName}`);
+      if (!appDetailsResponse.ok) {
+        const errorData = await appDetailsResponse.json();
+        throw new Error(errorData.detail || `Failed to fetch app details! status: ${appDetailsResponse.status}`);
+      }
+      const appData = await appDetailsResponse.json();
+      
+      // Then, use the fetched appData to request the transcript
+      const transcriptResponse = await fetch('http://10.100.15.44:8000/api/transcript', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ app: appData }),
+      });
+
+      if (!transcriptResponse.ok) {
+        const errorData = await transcriptResponse.json();
+        throw new Error(errorData.detail || `HTTP error! status: ${transcriptResponse.status}`);
+      }
+
       const transcriptData = await transcriptResponse.json();
       
       setTranscript(transcriptData.transcript);
@@ -177,8 +199,38 @@ export default function EditorPage() {
             {sourceContext.url && sourceContext.headings.length === 0 && sourceContext.buttons.length === 0 && sourceContext.cards.length === 0 && sourceContext.tables.length === 0 && (
                 <p className="text-sm text-gray-500 mt-2">No specific visible content (headings, buttons, cards, tables) found on the page.</p>
             )}
-            {/* If there's an error from the backend, it will be displayed by the main error alert.
-                This section now shows only context, not the warning message itself. */}
+            {/* Display message if no specific content was found or if there was a reading error */}
+            {sourceContext.url && !sourceContext.repo_name && sourceContext.headings.length === 0 && sourceContext.buttons.length === 0 && sourceContext.cards.length === 0 && sourceContext.tables.length === 0 && (
+                <p className="text-sm text-gray-500 mt-2">No specific visible web page content (headings, buttons, cards, tables) found.</p>
+            )}
+            {sourceContext.repo_name && sourceContext.repo_name === "Error" && (
+                <p className="text-sm text-red-500 mt-2 font-medium">Failed to fetch repository context: {sourceContext.repo_description}</p>
+            )}
+
+            {showSourceContext && sourceContext && sourceContext.type === "github_repo" && (
+                <div className="bg-white rounded-lg shadow-md p-6 mt-4 border border-blue-200">
+                    <h3 className="text-xl font-semibold mb-3 text-blue-800">Repository Context</h3>
+                    <p className="text-gray-700 mb-1">
+                        <strong className="font-semibold">Repo Name:</strong> {sourceContext.repo_name || 'N/A'}
+                    </p>
+                    <p className="text-gray-700 mb-1">
+                        <strong className="font-semibold">Repo URL:</strong> <a href={sourceContext.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{sourceContext.url}</a>
+                    </p>
+                    <p className="text-gray-700 mb-1">
+                        <strong className="font-semibold">Description:</strong> {sourceContext.repo_description || 'N/A'}
+                    </p>
+                    {renderList(sourceContext.tech_stack, 'Detected Tech Stack')}
+                    {renderList(sourceContext.detected_features, 'Inferred Features')}
+                    {sourceContext.readme_preview && (
+                        <div className="mt-2">
+                            <strong className="font-semibold">README.md Preview:</strong>
+                            <p className="text-gray-700 whitespace-pre-wrap text-sm border p-2 rounded bg-gray-50 max-h-48 overflow-auto">
+                                {sourceContext.readme_preview}
+                            </p>
+                        </div>
+                    )}
+                </div>
+            )}
           </div>
         )}
       </div>

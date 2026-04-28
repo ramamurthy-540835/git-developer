@@ -18,12 +18,17 @@ load_dotenv(dotenv_path='./.env.local')
 # Import agents
 # These imports are critical; if they fail, the app shouldn't start.
 from agents.transcript_agent import generate_transcript
+from agents.github_reader_agent import get_repo_context # New import
 from agents.tts_agent import text_to_mp3
 from agents.gcs_agent import upload_to_gcs
 
 
 # Initialize FastAPI app
 app = FastAPI(title="GCP Studio Media Agent")
+
+# Pydantic model for repo context request
+class RepoContextRequest(BaseModel):
+    repo_url: str
 
 # Add CORS middleware
 origins = [
@@ -42,9 +47,11 @@ app.add_middleware(
 # Pydantic models for request bodies
 class AppData(BaseModel):
     name: str
-    url: str
+    url: Optional[str] = None # Make URL optional as repo_url can be used
+    repo_url: Optional[str] = None # New: for GitHub repo context
+    title: Optional[str] = None
     description: Optional[str] = None
-    # Add other fields like tags if they become relevant in the future
+    tags: Optional[List[str]] = None
 
 class TranscriptRequest(BaseModel):
     app: AppData
@@ -96,13 +103,30 @@ async def get_app_by_name(app_name: str):
         logging.error(f"Error parsing config/apps.yaml: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error parsing application configuration: {e}")
 
+@app.post("/api/repo-context")
+async def get_repository_context_endpoint(request_body: RepoContextRequest):
+    """
+    Fetches and returns the context of a given GitHub repository.
+    """
+    repo_url = request_body.repo_url
+    logging.info(f"Received request for repository context for: {repo_url}")
+    try:
+        repo_context = get_repo_context(repo_url)
+        if "Error" in repo_context.get("name", ""):
+            raise HTTPException(status_code=500, detail=repo_context.get("description", "Failed to fetch repository context."))
+        return repo_context
+    except Exception as e:
+        logging.error(f"Error fetching repository context for {repo_url}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal server error fetching repository context: {e}")
+
 @app.post("/api/transcript")
 async def post_transcript(request_body: TranscriptRequest):
-    app_data = request_body.app.dict() # Convert Pydantic model to dict
+    app_data = request_body.app.dict(exclude_unset=True) # Convert Pydantic model to dict, exclude optional fields not set
     app_name = app_data.get('name', 'unknown_app')
     logging.info(f"Received request for transcript generation for app: {app_name}")
 
     try:
+        # generate_transcript now handles fetching from repo_url or url internally
         transcript, source_context, warning_message = await generate_transcript(app_data)
         response_data = {
             "transcript": transcript,
@@ -113,8 +137,6 @@ async def post_transcript(request_body: TranscriptRequest):
         return response_data
     except Exception as e:
         logging.error(f"Error generating transcript for app {app_name}: {e}", exc_info=True)
-        # If an unhandled exception occurs before generate_transcript returns,
-        # or if generate_transcript itself throws, catch it here.
         raise HTTPException(status_code=500, detail=f"Internal server error during transcript generation: {e}")
 
 @app.post("/api/generate-mp3")

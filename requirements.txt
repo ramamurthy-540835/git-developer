@@ -1,3 +1,5 @@
+requests==2.32.3
+PyGithub==2.2.0
 playwright==1.43.0
 beautifulsoup4==4.12.3
 fastapi==0.110.1
@@ -7,7 +9,5 @@ pyyaml==6.0.1
 google-generativeai==0.8.6
 google-cloud-storage==2.16.0
 gtts==2.5.1
-playwright==1.43.0
-beautifulsoup4==4.12.3
 # If using `agents/llm.py` from Google Cloud's Vertex AI SDK:
 # google-cloud-aiplatform # Add if llm.py uses this directly and it's not present

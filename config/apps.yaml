@@ -1,7 +1,7 @@
 apps:
   - name: vbc_dashboard
     title: Value-Based Care Dashboard
-    url: https://vbc-dashboard-1035117862188.us-central1.run.app
+    repo_url: https://github.com/ramamurthy-540835/healthcare_vbc_pa
     description: Healthcare analytics dashboard for value-based care programs, including population risk, high-risk cohorts, care gaps, quality measures, utilization, care management actions, provider performance, executive KPIs, and AI-driven care insights.
     tags:
       - healthcare
@@ -13,25 +13,25 @@ apps:
       - AI-insights
 
   - name: weathernext_dashboard
-    url: https://weathernext-dashboard-1035117862188.us-central1.run.app
     title: WeatherNext AI Intelligence Platform
+    repo_url: https://github.com/ramamurthy-540835/weathernext
     description: An advanced AI weather forecasting and climate intelligence platform offering granular predictions and actionable insights. Features include a dynamic 3D globe visualization, auto-rotating views, real-time alert scans for environmental dangers, detailed 15-day forecasts, ensemble modeling, and city-specific data. Users can interact with a conversational AI for deeper analysis, export data, and access decision briefs for critical operations.
     tags: [AI, weather-forecasting, climate-intelligence, geospatial, 3D-visualization, alerts, data-analytics, enterprise, decision-support]
 
   - name: adept_healthcare
-    url: https://adept-healthcare-vbc-pa-frontend-1035117862188.us-central1.run.app
     title: Adept Healthcare VBC & Prior Authorization Platform
+    url: https://adept-healthcare-vbc-pa-frontend-1035117862188.us-central1.run.app # Keeping original URL as no repo_url provided in request for this.
     description: A cutting-edge healthcare platform integrating Value-Based Care (VBC) management with streamlined Prior Authorization workflows. It features a critical risk network, population intelligence, AI-predicted risk trends, and personalized AI recommendations for clinical ops, physicians, care managers, and finance directors. The platform offers a 4D Data Fabric for granular patient data analysis (patient_id, icd10_code, facility_name, risk_score) with configurable dimensions and filters, and a system summary of pending actions, graph connections, and data quality health scores. Powered by BigQuery, Gemini, and GCP.
     tags: [healthcare, prior-authorization, value-based-care, AI, risk-management, data-fabric, patient-management, clinical-intelligence, population-health, BigQuery, Gemini, GCP]
 
   - name: dataeng_console
-    url: https://dataeng-console-1035117862188.us-central1.run.app
     title: Data Engineering & Analytics Console
+    url: https://dataeng-console-10351117862188.us-central1.run.app # Keeping original URL as no repo_url provided in request for this.
     description: A robust console for managing end-to-end data engineering pipelines and advanced analytics. It provides a centralized interface for monitoring data ingestion, transformation, and storage processes, visualizing data lineage, and performing ad-hoc queries. The platform supports automated pipeline orchestration, data quality monitoring, and integration with various data sources and destinations to ensure reliable and high-performance data operations for enterprise data teams.
     tags: [data-engineering, analytics, data-pipelines, data-governance, data-quality, monitoring, enterprise, cloud-native]
 
   - name: ctopteam_frontend
-    url: https://ctopteam-frontend-1035117862188.us-central1.run.app
     title: GenAI & Modernization Platform UI
+    repo_url: https://github.com/ramamurthy-540835/ctopteam
     description: A user-friendly frontend for a GenAI and modernization platform, designed to accelerate digital transformation. This interface enables users to interact with generative AI models for content creation, leverage modernization tools for legacy system upgrades, and manage cloud-native applications. It features a streamlined workflow for AI-powered tasks, intelligent search capabilities, and customizable dashboards to monitor modernization progress and AI utilization.
     tags: [GenAI, AI, modernization, digital-transformation, cloud-native, enterprise-UI, intelligent-automation]
