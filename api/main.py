@@ -76,13 +76,17 @@ async def get_all_repos():
     try:
         with open("config/repos.yaml", "r") as f:
             repos_config = yaml.safe_load(f)
-        return {"repos": repos_config.get("repos", [])}
+        repos = repos_config.get("repos", [])
+        logging.info(f"Loaded {len(repos)} repos from config/repos.yaml")
+        return {"repos": repos}
     except FileNotFoundError:
-        logging.error("config/repos.yaml not found", exc_info=True)
-        raise HTTPException(status_code=404, detail="Repository configuration file not found.")
+        error_msg = "config/repos.yaml not found. Please ensure the repository configuration file exists at the project root."
+        logging.error(error_msg, exc_info=True)
+        raise HTTPException(status_code=500, detail=error_msg)
     except yaml.YAMLError as e:
-        logging.error(f"Error parsing config/repos.yaml: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error parsing repository configuration: {e}")
+        error_msg = f"Error parsing config/repos.yaml: {e}. Please check the YAML file for syntax errors."
+        logging.error(error_msg, exc_info=True)
+        raise HTTPException(status_code=500, detail=error_msg)
 
 @app.get("/api/repos/{owner_repo:path}")
 async def get_repo_by_full_name(owner_repo: str):
