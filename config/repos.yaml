@@ -1,6 +1,6 @@
 repos:
   - name: healthcare-vbc-pa
-    full_name: ramamurthy-540835/healthcare-vbc-pa
+    full_name: ramamurthy-540835/healthcare_vbc_pa # Corrected to match actual GitHub repo name
     repo_url: https://github.com/ramamurthy-540835/healthcare_vbc_pa
     description: A comprehensive healthcare analytics dashboard designed for value-based care programs. It provides real-time insights into patient population risk, identifies high-risk cohorts, highlights care gaps, tracks key quality measures, monitors utilization patterns, supports care management actions, evaluates provider performance, and presents executive-level KPIs. This platform empowers care teams to prioritize interventions, improve patient outcomes, reduce avoidable utilization, and effectively manage both payer and provider performance within value-based contracts.
     language: Python
