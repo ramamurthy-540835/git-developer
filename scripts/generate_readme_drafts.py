@@ -80,6 +80,7 @@ def generate_readme_content(repo_metadata: Dict[str, Any], github_repo_context: 
         f"## Deployment",
         f"## Demo Workflow",
         f"## Future Enhancements",
+        f"\nIMPORTANT: Do NOT generate Mermaid diagrams. Use plain Markdown bullet lists, numbered lists, or simple ASCII text for architecture flows or any other diagrams. For architecture, a numbered list describing the flow is preferred.",
         f"\nUse the following information to populate the sections:",
         f"Project Name: {repo_name}",
         f"Full GitHub Name: {full_name}",
@@ -110,10 +111,31 @@ def generate_readme_content(repo_metadata: Dict[str, Any], github_repo_context: 
 
     try:
         response = model.generate_content(full_prompt)
-        return response.text.strip()
+        generated_content = response.text.strip()
+        return generated_content
     except Exception as e:
         logging.error(f"Gemini generation failed for {full_name}: {e}", exc_info=True)
         return ""
+
+MERMAID_PLACEHOLDER_FLOW = """
+## Architecture Flow (Simplified)
+*   User opens the application in a browser/device.
+*   The frontend (UI) makes API requests to the backend.
+*   The backend API processes requests, interacts with data sources (like a database or external services), and generates responses.
+*   API responses are returned to the frontend.
+*   The frontend renders the data and updates the user interface.
+"""
+
+def sanitize_readme_markdown(content: str) -> str:
+    """
+    Removes Mermaid blocks and replaces them with a generic Markdown architecture flow.
+    """
+    mermaid_block_pattern = r"```mermaid.*?```"
+    if re.search(mermaid_block_pattern, content, re.DOTALL):
+        logging.info("Detected Mermaid block in generated content. Replacing with simplified Markdown flow.")
+        # Replace all mermaid blocks with the predefined placeholder
+        content = re.sub(mermaid_block_pattern, MERMAID_PLACEHOLDER_FLOW, content, flags=re.DOTALL)
+    return content
 
 def publish_readme_to_github(
     owner: str, 
