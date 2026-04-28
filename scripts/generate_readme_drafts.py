@@ -5,6 +5,7 @@ import yaml
 import re
 from pathlib import Path
 from dotenv import load_dotenv
+from typing import Dict, Any, Optional # Import Dict, Any, and Optional
 
 # Ensure google.generativeai is imported, potentially using a shared LLM agent later
 try:
