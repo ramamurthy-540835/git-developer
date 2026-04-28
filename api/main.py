@@ -14,12 +14,14 @@ load_dotenv(dotenv_path='./.env.local')
 # Assuming agents.transcript_agent exists and has generate_transcript
 try:
     from agents.transcript_agent import generate_transcript
-except ImportError as import_error:
-    app.logger.error(f"Failed to import generate_transcript: {import_error}")
+except ImportError as import_error_orig:
+    app.logger.error(f"Failed to import generate_transcript: {import_error_orig}")
+    # Capture the error message as a string so it's available in the nested function's scope
+    error_message = str(import_error_orig)
     # Define a fallback if import fails, to prevent app crash
     async def generate_transcript(app_data):
         return (f"Error: Transcript generation service not available. "
-                f"Missing dependency: {import_error}", {})
+                f"Missing dependency: {error_message}", {})
 
 
 @app.route('/api/transcript', methods=['POST'])
