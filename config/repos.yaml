@@ -1,0 +1,28 @@
+repos:
+  - name: healthcare-vbc-pa
+    full_name: ramamurthy-540835/healthcare-vbc-pa
+    repo_url: https://github.com/ramamurthy-540835/healthcare_vbc_pa
+    description: A comprehensive healthcare analytics dashboard designed for value-based care programs. It provides real-time insights into patient population risk, identifies high-risk cohorts, highlights care gaps, tracks key quality measures, monitors utilization patterns, supports care management actions, evaluates provider performance, and presents executive-level KPIs. This platform empowers care teams to prioritize interventions, improve patient outcomes, reduce avoidable utilization, and effectively manage both payer and provider performance within value-based contracts.
+    language: Python
+    private: false
+    updated_at: "2024-04-26T10:00:00Z"
+    # Example tags, these will be dynamically read by the github_reader_agent based on README/code
+    tags: [healthcare, value-based-care, risk-stratification, care-gaps, quality-measures, population-health, AI-insights]
+
+  - name: weathernext
+    full_name: ramamurthy-540835/weathernext
+    repo_url: https://github.com/ramamurthy-540835/weathernext
+    description: An advanced AI weather forecasting and climate intelligence platform offering granular predictions and actionable insights. Features include a dynamic 3D globe visualization, auto-rotating views, real-time alert scans for environmental dangers, detailed 15-day forecasts, ensemble modeling, and city-specific data. Users can interact with a conversational AI for deeper analysis, export data, and access decision briefs for critical operations.
+    language: JavaScript
+    private: false
+    updated_at: "2024-04-27T14:30:00Z"
+    tags: [AI, weather-forecasting, climate-intelligence, geospatial, 3D-visualization, alerts, data-analytics]
+
+  - name: ctopteam
+    full_name: ramamurthy-540835/ctopteam
+    repo_url: https://github.com/ramamurthy-540835/ctopteam
+    description: A user-friendly frontend for a GenAI and modernization platform, designed to accelerate digital transformation. This interface enables users to interact with generative AI models for content creation, leverage modernization tools for legacy system upgrades, and manage cloud-native applications. It features a streamlined workflow for AI-powered tasks, intelligent search capabilities, and customizable dashboards to monitor modernization progress and AI utilization.
+    language: TypeScript
+    private: false
+    updated_at: "2024-04-28T09:15:00Z"
+    tags: [GenAI, AI, modernization, digital-transformation, cloud-native, enterprise-UI]
