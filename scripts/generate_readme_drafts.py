@@ -116,75 +116,135 @@ def generate_readme_content(repo_metadata: Dict[str, Any], github_repo_context: 
         logging.error(f"Gemini generation failed for {full_name}: {e}", exc_info=True)
         return ""
 
-def get_architecture_flow_steps_from_llm(repo_metadata: Dict[str, Any], github_repo_context: Optional[Dict[str, Any]] = None) -> List[str]:
+def detect_repo_archetype(repo_metadata: Dict[str, Any], github_repo_context: Optional[Dict[str, Any]]) -> str:
     """
-    Asks Gemini to generate a JSON list of architecture flow steps.
+    Detects the repository archetype based on metadata and GitHub context.
     """
-    repo_name = repo_metadata.get("name", "Unnamed Project").replace('-', ' ').replace('_', ' ').title()
-    description = repo_metadata.get("description", "A comprehensive project.")
+    repo_name = repo_metadata.get("name", "").lower()
+    description = repo_metadata.get("description", "").lower()
+    language = repo_metadata.get("language", "").lower()
+    tech_stack = [t.lower() for t in github_repo_context.get("tech_stack", [])] if github_repo_context else []
+    features = [f.lower() for f in github_repo_context.get("features", [])] if github_repo_context else []
+    files = [f.lower() for f in github_repo_context.get("files", [])] if github_repo_context else []
+
+    # Prioritize specific platforms/apps
+    if "weather" in repo_name or "weather" in description or "weather" in features:
+        return "weather_platform"
+    if "healthcare" in repo_name or "healthcare" in description or "care" in features:
+        return "healthcare_platform"
+    if "agent" in repo_name or "agent" in description or "llm" in tech_stack or "gemini" in tech_stack or "ai" in features:
+        return "agent_platform"
+    if "data" in repo_name or "data" in description or "data" in tech_stack or "analytics" in features:
+        return "data_platform"
+
+    # Then general types
+    if "nextjs" in tech_stack or language == "typescript" or "frontend" in files or "app/page.js" in files:
+        return "nextjs_app"
+    if language == "python" or "flask" in tech_stack or "django" in tech_stack or "backend" in files:
+        return "python_backend"
     
-    prompt_parts = [
-        f"Generate ONLY a JSON object containing a list of strings, where each string is a concise step in the project's architecture flow. Limit the list to a maximum of 6 steps.",
-        f"The JSON should be in the exact format: {{\"architecture_flow\": [\"step 1\", \"step 2\", ...]}}",
-        f"Project Name: {repo_name}",
-        f"Primary Description: {description}",
-    ]
-    
-    if github_repo_context:
-        prompt_parts.append("\n--- Additional Repository Context (integrate this information for architecture flow) ---")
-        if github_repo_context.get("tech_stack"):
-            prompt_parts.append(f"Detected Technologies from codebase: {', '.join(github_repo_context['tech_stack'])}")
-        if github_repo_context.get("features"):
-            prompt_parts.append(f"Inferred Features/Capabilities from codebase: {', '.join(github_repo_context['features'])}")
-        if github_repo_context.get("files"):
-            prompt_parts.append(f"Top-level files and directories in repository: {', '.join(github_repo_context['files'])}")
-        prompt_parts.append("Deduce the architecture flow steps from this context.")
-    else:
-        prompt_parts.append("\n--- IMPORTANT: No GitHub repository context was available. Generate the architecture flow using only the provided metadata. ---")
+    return "generic_app"
 
-    full_prompt = "\n".join(prompt_parts)
-    logging.debug(f"Sending architecture flow prompt to LLM (first 500 chars):\n{full_prompt[:500]}...")
 
-    try:
-        response = model.generate_content(full_prompt)
-        generated_json_str = response.text.strip()
-        logging.debug(f"Raw architecture flow JSON from LLM: {generated_json_str}")
-        # Attempt to parse, sometimes LLMs wrap JSON in markdown code blocks
-        if generated_json_str.startswith("```json") and generated_json_str.endswith("```"):
-            generated_json_str = generated_json_str[len("```json"):-len("```")].strip()
+def build_architecture_steps(archetype: str, repo_metadata: Dict[str, Any], github_repo_context: Optional[Dict[str, Any]]) -> List[str]:
+    """
+    Builds a list of 5 to 7 architecture steps based on the detected archetype.
+    """
+    repo_name_title = repo_metadata.get("name", "Application").replace('-', ' ').replace('_', ' ').title()
+    description = repo_metadata.get("description", "")
 
-        data = json.loads(generated_json_str)
-        if "architecture_flow" in data and isinstance(data["architecture_flow"], list):
-            return data["architecture_flow"][:6] # Ensure max 6 steps
-        else:
-            logging.warning(f"LLM response for architecture flow did not contain 'architecture_flow' list or was malformed: {generated_json_str}")
-            return []
-    except json.JSONDecodeError as e:
-        logging.error(f"Failed to parse architecture flow JSON from LLM: {e}. Raw response: {generated_json_str}", exc_info=True)
-        return []
-    except Exception as e:
-        logging.error(f"Gemini generation failed for architecture flow: {e}", exc_info=True)
-        return []
+    base_steps = []
+
+    if archetype == "nextjs_app":
+        base_steps = [
+            f"User opens the {repo_name_title} web application",
+            "Next.js frontend renders pages and components",
+            "API routes handle application requests",
+            "Backend services process business logic",
+            "External APIs or data stores provide data",
+            "UI displays generated insights and actions"
+        ]
+    elif archetype == "python_backend":
+        base_steps = [
+            "Client sends API request",
+            f"Load balancer/API Gateway routes request to {repo_name_title} backend",
+            "Python backend processes request with business logic",
+            "Database or external services are queried",
+            "Backend generates and returns API response"
+        ]
+    elif archetype == "agent_platform":
+        base_steps = [
+            "User submits task or prompt",
+            f"Frontend sends request to {repo_name_title} orchestration API",
+            "Agent orchestrator plans the workflow",
+            "Specialized agents execute tools and business logic",
+            "LLM service generates structured output",
+            "Results are stored, reviewed, and displayed to the user"
+        ]
+    elif archetype == "data_platform":
+        base_steps = [
+            "Data sources ingest raw data",
+            f"Data processing pipelines transform data for {repo_name_title}",
+            "Data is stored in warehouses/lakes",
+            "Analytics layer queries and processes data",
+            "Reporting/Visualization tools display insights",
+            "Users consume insights for decision making"
+        ]
+    elif archetype == "healthcare_platform":
+        base_steps = [
+            f"Care team opens {repo_name_title} dashboard",
+            "Frontend shows patient cohorts and workflow views",
+            "Backend APIs load clinical and operational data",
+            "Analytics layer calculates risk, care gaps, and quality measures",
+            "AI agents generate recommendations and next actions",
+            "Users review insights and trigger care management workflows"
+        ]
+    elif archetype == "weather_platform":
+        base_steps = [
+            f"User opens {repo_name_title} dashboard",
+            "Next.js frontend renders forecast views and maps",
+            "API routes request weather and climate data",
+            "Forecast engine processes city and model inputs",
+            "AI insight layer generates alerts and decision briefs",
+            "Dashboard displays forecasts, risks, and export options"
+        ]
+    else: # generic_app
+        base_steps = [
+            "User interacts with the application interface",
+            "Frontend sends requests to the backend",
+            "Backend processes requests and applies business logic",
+            "Data is retrieved from or stored in the database",
+            "External services or APIs are integrated (if applicable)",
+            "Results are returned and displayed to the user"
+        ]
+
+    # Dynamically add an extra step if there's a strong AI/ML presence and < 7 steps
+    if len(base_steps) < 7 and ("ai" in description or "machine learning" in description or "gemini" in tech_stack or "llm" in tech_stack):
+        base_steps.insert(len(base_steps) - 1, "AI/ML models process data and generate insights")
+        
+    return base_steps[:7] # Ensure max 7 steps
 
 def steps_to_mermaid(steps: List[str]) -> str:
     """
-    Converts a list of architecture steps into a Mermaid flowchart TD string.
-    Quotes all labels and strips unsafe characters. Limits to max 6 steps.
+    Converts a list of architecture steps (5-7) into a Mermaid flowchart TD string.
+    Quotes all labels and strips unsafe characters.
     """
-    if not steps:
+    if not steps or not (5 <= len(steps) <= 7):
+        logging.warning(f"Invalid number of steps for Mermaid diagram: {len(steps)}. Expected 5-7.")
         return ""
 
     diagram_lines = ["flowchart TD"]
-    steps = steps[:6] # Ensure max 6 steps
     
+    # Generate node IDs (A, B, C, ...)
     node_ids = [chr(ord('A') + i) for i in range(len(steps))]
 
+    # Define nodes with quoted labels
     for i, step in enumerate(steps):
         # Sanitize label: replace double quotes with single, remove newlines, trim whitespace.
-        # Ensure it's safe for a Mermaid quoted label.
         sanitized_step = step.replace('"', "'").replace('\n', ' ').strip()
         diagram_lines.append(f"  {node_ids[i]}[\"{sanitized_step}\"]")
 
+    # Define connections
     for i in range(len(steps) - 1):
         diagram_lines.append(f"  {node_ids[i]} --> {node_ids[i+1]}")
     
@@ -493,27 +553,22 @@ def main():
                 report["summary"]["failed_count"] += 1
                 continue # Cannot proceed without README content
 
-            # --- Generate Architecture Diagram components ---
-            architecture_steps = []
-            for i in range(retries):
-                try:
-                    architecture_steps = get_architecture_flow_steps_from_llm(repo_metadata, github_repo_context)
-                    if architecture_steps:
-                        break
-                except Exception as e:
-                    logging.warning(f"Gemini architecture flow generation attempt {i+1}/{retries} failed for '{full_name}': {e}. Retrying in 5 seconds...")
-                    time.sleep(5) # Wait before retrying
+            # --- Determine Architecture and Generate Diagram components ---
+            archetype = detect_repo_archetype(repo_metadata, github_repo_context)
+            logging.info(f"Detected archetype for '{full_name}': {archetype}")
             
+            architecture_steps = build_architecture_steps(archetype, repo_metadata, github_repo_context)
+
             if architecture_steps:
                 mermaid_content = steps_to_mermaid(architecture_steps)
                 if mermaid_content:
                     html_content = generate_architecture_html(mermaid_content, repo_name)
                     logging.info(f"Generated architecture diagram for '{full_name}'.")
                 else:
-                    logging.warning(f"Mermaid content generation failed for '{full_name}'. Falling back to bullet list.")
+                    logging.warning(f"Mermaid content generation failed for '{full_name}' with {len(architecture_steps)} steps. Falling back to bullet list.")
                     architecture_flow_bullet_list = "\n" + "\n".join([f"* {step}" for step in architecture_steps]) + "\n"
             else:
-                logging.warning(f"Failed to generate architecture flow steps from Gemini for '{full_name}' after {retries} attempts. Falling back to simple placeholder.")
+                logging.warning(f"Failed to build architecture flow steps for '{full_name}'. Falling back to simple placeholder.")
                 architecture_flow_bullet_list = "\n* Architecture flow steps could not be generated. Please review the project manually.\n"
             
             # --- Insert Architecture section into README content ---
