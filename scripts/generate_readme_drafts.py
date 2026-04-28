@@ -100,46 +100,73 @@ def generate_readme_content(repo_metadata: Dict[str, Any], github_repo_context: 
     language = repo_metadata.get("language", "Not specified")
     tags = ", ".join(repo_metadata.get("tags", [])) if repo_metadata.get("tags") else "N/A"
 
-    prompt_parts = [
-        f"Generate ONLY a professional and practical GitHub README.md in markdown format. Do not include any extra commentary, introductory/concluding remarks, or non-markdown text.",
-        f"The README should clearly explain the project and be structured with the following sections:",
-        f"# {repo_name}",
-        f"## Overview",
-        f"## Business Problem",
-        f"## Key Capabilities",
-        f"## Tech Stack",
-        f"## Repository Structure",
-        f"## Local Setup",
-        f"## Deployment",
-        f"## Demo Workflow",
-        f"## Future Enhancements",
-        f"\nIMPORTANT: The 'Architecture' section will be added programmatically with a Mermaid diagram or a bullet list. Do not generate it here.",
-        f"\nUse the following information to populate the sections (excluding Architecture):",
-        f"Project Name: {repo_name}",
-        f"Full GitHub Name: {full_name}",
-        f"GitHub URL: {repo_url}",
-        f"Primary Description: {description}",
-        f"Main Language: {language}",
-    ]
+    github_repo_context_str = json.dumps(github_repo_context, indent=2) if github_repo_context else "None"
 
-    if tags != "N/A":
-        prompt_parts.append(f"Key Themes/Tags: {tags}")
+    full_prompt = f"""
+You are a senior software architect.
 
-    if github_repo_context:
-        prompt_parts.append("\n--- Additional Repository Context (integrate this information) ---")
-        if github_repo_context.get("readme") and github_repo_context["readme"] != "No README.md found.":
-            prompt_parts.append(f"Existing README content (for enrichment/reference, do not simply copy): {github_repo_context['readme']}")
-        if github_repo_context.get("tech_stack"):
-            prompt_parts.append(f"Detected Technologies from codebase: {', '.join(github_repo_context['tech_stack'])}")
-        if github_repo_context.get("features"):
-            prompt_parts.append(f"Inferred Features/Capabilities from codebase: {', '.join(github_repo_context['features'])}")
-        if github_repo_context.get("files"):
-            prompt_parts.append(f"Top-level files and directories in repository: {', '.join(github_repo_context['files'])}")
-        prompt_parts.append("Deduce Architecture, Local Setup, Deployment, and Demo Workflow details from this context.")
-    else:
-        prompt_parts.append("\n--- IMPORTANT: No GitHub repository context was available. Generate the README using only the provided metadata. ---")
+Generate a clean, structured GitHub README for the repository.
 
-    full_prompt = "\n".join(prompt_parts)
+STRICT RULES:
+- Use concise sections
+- Keep total length < 800 lines
+- Avoid repetition
+- Use bullet points instead of long paragraphs
+- Keep each paragraph max 4 lines
+- No unnecessary marketing text
+- No hallucinations
+
+OUTPUT FORMAT:
+
+# {repo_name}
+
+## Overview
+(3-5 bullet points only)
+
+## Business Problem
+(3-5 bullet points)
+
+## Key Capabilities
+(5-8 bullet points max)
+
+## Tech Stack
+- Cloud:
+- Backend:
+- Frontend:
+- Data:
+- AI/ML:
+
+## Architecture Flow (VERY IMPORTANT)
+Return ONLY numbered steps (NO Mermaid)
+
+Example:
+1. User opens frontend
+2. Frontend calls backend API
+3. Backend processes request
+4. Backend calls AI service
+5. Backend stores results
+
+## Repository Structure
+Give SHORT tree (max 15 lines)
+
+## Local Setup
+Step-by-step commands (concise)
+
+## Deployment
+Short steps (max 10 lines)
+
+DO NOT:
+- Write Mermaid diagrams
+- Write long paragraphs
+- Exceed limits
+- Add explanations outside sections
+
+REPO DATA:
+{json.dumps(repo_metadata, indent=2)}
+
+OPTIONAL CONTEXT:
+{github_repo_context_str}
+"""
     logging.debug(f"Sending prompt to LLM (first 500 chars):\n{full_prompt[:500]}...")
 
     retries = 2
