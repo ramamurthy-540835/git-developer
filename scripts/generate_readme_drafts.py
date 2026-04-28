@@ -20,12 +20,7 @@ import requests # New: for GitHub REST API calls
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-# Ensure google.genai is imported
-try:
-    import google.genai as genai
-except ImportError:
-    logging.error("google-genai not found. Please install it: pip install google-genai")
-    sys.exit(1)
+from google import genai
 
 # Import github_reader_agent safely after sys.path fix
 github_reader_agent = None
@@ -39,19 +34,41 @@ except Exception as e:
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
 # Load environment variables from .env.local
 load_dotenv(dotenv_path='./.env.local')
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-GEMINI_MODEL_NAME = os.environ.get("GEMINI_MODEL_NAME", "gemini-2.5-flash")
+GEMINI_MODEL_NAME = os.getenv("GEMINI_MODEL_NAME") or os.getenv("GEMINI_MODEL") or "gemini-2.5-flash"
 
-if not GEMINI_API_KEY:
-    logging.error("GEMINI_API_KEY or GOOGLE_API_KEY environment variable not set. Please set it in .env.local.")
-    exit(1)
+def create_genai_client():
+    """
+    Creates and returns a genai.Client instance, preferring an API key,
+    then falling back to Vertex AI ADC.
+    """
+    gemini_api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 
-model = genai.GenerativeModel(GEMINI_MODEL_NAME, api_key=GEMINI_API_KEY)
+    if gemini_api_key:
+        logging.info("Initializing genai client with API key.")
+        return genai.Client(api_key=gemini_api_key)
+    
+    logging.info("API key not found, attempting to initialize genai client with Vertex AI ADC.")
+    try:
+        project_id = os.getenv("GOOGLE_CLOUD_PROJECT") or os.getenv("GCP_PROJECT_ID")
+        location = os.getenv("VERTEX_AI_LOCATION") or os.getenv("GCP_REGION") or "us-central1"
+        
+        if not project_id:
+            logging.error("GOOGLE_CLOUD_PROJECT or GCP_PROJECT_ID environment variable not set for Vertex AI.")
+            sys.exit(1)
+            
+        return genai.Client(
+            vertexai=True,
+            project=project_id,
+            location=location,
+        )
+    except Exception as e:
+        logging.error(f"Failed to initialize genai client with Vertex AI: {e}. Please ensure gcloud is configured or an API key is provided.")
+        sys.exit(1)
+
+client = create_genai_client()
 
 def generate_readme_content(repo_metadata: Dict[str, Any], github_repo_context: Optional[Dict[str, Any]] = None) -> str:
     """
@@ -107,13 +124,26 @@ def generate_readme_content(repo_metadata: Dict[str, Any], github_repo_context: 
     full_prompt = "\n".join(prompt_parts)
     logging.debug(f"Sending prompt to LLM (first 500 chars):\n{full_prompt[:500]}...")
 
-    try:
-        response = model.generate_content(full_prompt)
-        generated_content = response.text.strip()
-        return generated_content
-    except Exception as e:
-        logging.error(f"Gemini generation failed for {full_name}: {e}", exc_info=True)
-        return ""
+    retries = 2
+    for i in range(retries + 1):
+        try:
+            response = client.models.generate_content(
+                model=GEMINI_MODEL_NAME,
+                contents=full_prompt,
+            )
+            generated_content = response.text.strip()
+            if generated_content:
+                return generated_content
+            else:
+                raise ValueError("LLM returned empty content.")
+        except Exception as e:
+            logging.warning(f"Gemini README generation attempt {i+1}/{retries+1} failed for '{full_name}': {e}. Retrying in 5 seconds...")
+            if i < retries:
+                time.sleep(5) # Wait before retrying
+            else:
+                logging.error(f"Failed to generate content for README for '{full_name}' after {retries+1} attempts.")
+                return ""
+    return "" # Should not be reached if retries are exhausted and error is logged
 
 def generate_diagram_plan(repo_metadata: Dict[str, Any], github_repo_context: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     """
@@ -177,12 +207,15 @@ def generate_diagram_plan(repo_metadata: Dict[str, Any], github_repo_context: Op
     logging.debug(f"Sending diagram plan prompt to LLM (first 1000 chars):\n{full_prompt[:1000]}...")
 
     plan_data = None
-    retries = 2 # Initial attempt + 1 retry
+    retries = 2 # Initial attempt + 2 retries = 3 total attempts
     for i in range(retries + 1):
         try:
-            response = model.generate_content(full_prompt)
+            response = client.models.generate_content(
+                model=GEMINI_MODEL_NAME,
+                contents=full_prompt,
+            )
             generated_json_str = response.text.strip()
-            logging.debug(f"Raw diagram plan JSON from LLM (attempt {i+1}): {generated_json_str}")
+            logging.debug(f"Raw diagram plan JSON from LLM (attempt {i+1}/{retries+1}): {generated_json_str}")
 
             # Clean markdown code block if present
             if generated_json_str.startswith("```json") and generated_json_str.endswith("```"):
@@ -192,7 +225,7 @@ def generate_diagram_plan(repo_metadata: Dict[str, Any], github_repo_context: Op
             logging.debug(f"Parsed diagram plan: {plan_data}")
             break # Successfully parsed
         except json.JSONDecodeError as e:
-            logging.warning(f"Failed to parse diagram plan JSON from LLM (attempt {i+1}): {e}. Raw response: {generated_json_str}", exc_info=True)
+            logging.warning(f"Failed to parse diagram plan JSON from LLM (attempt {i+1}/{retries+1}): {e}. Raw response: {generated_json_str}", exc_info=True)
             if i < retries:
                 logging.info("Retrying diagram plan generation with stricter prompt...")
                 # For retry, append a reminder about strict JSON
@@ -202,8 +235,13 @@ def generate_diagram_plan(repo_metadata: Dict[str, Any], github_repo_context: Op
                 logging.error(f"Failed to parse diagram plan JSON after {retries + 1} attempts. Giving up.")
                 return None
         except Exception as e:
-            logging.error(f"Gemini generation failed for diagram plan (attempt {i+1}): {e}", exc_info=True)
-            return None # Other errors are generally non-recoverable by retry here
+            logging.error(f"Gemini generation failed for diagram plan (attempt {i+1}/{retries+1}): {e}", exc_info=True)
+            if i < retries:
+                logging.info("Retrying diagram plan generation after general error...")
+                time.sleep(2)
+            else:
+                logging.error(f"Failed to generate diagram plan after {retries+1} attempts due to general error.")
+                return None
 
     if plan_data and validate_diagram_plan(plan_data):
         return plan_data
