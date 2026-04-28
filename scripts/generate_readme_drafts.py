@@ -146,12 +146,12 @@ def detect_repo_archetype(repo_metadata: Dict[str, Any], github_repo_context: Op
     return "generic_app"
 
 
-def build_architecture_steps(archetype: str, repo_metadata: Dict[str, Any], github_repo_context: Optional[Dict[str, Any]]) -> List[str]:
+def build_architecture_steps(archetype: str, repo_metadata: Dict[str, Any], github_repo_context: Optional[Dict[str, Any]], tech_stack: List[str]) -> List[str]:
     """
     Builds a list of 5 to 7 architecture steps based on the detected archetype.
     """
     repo_name_title = repo_metadata.get("name", "Application").replace('-', ' ').replace('_', ' ').title()
-    description = repo_metadata.get("description", "")
+    description = repo_metadata.get("description", "").lower()
 
     base_steps = []
 
@@ -557,7 +557,9 @@ def main():
             archetype = detect_repo_archetype(repo_metadata, github_repo_context)
             logging.info(f"Detected archetype for '{full_name}': {archetype}")
             
-            architecture_steps = build_architecture_steps(archetype, repo_metadata, github_repo_context)
+            # Extract tech_stack from context for build_architecture_steps
+            tech_stack_for_arch = [t.lower() for t in github_repo_context.get("tech_stack", [])] if github_repo_context else []
+            architecture_steps = build_architecture_steps(archetype, repo_metadata, github_repo_context, tech_stack_for_arch)
 
             if architecture_steps:
                 mermaid_content = steps_to_mermaid(architecture_steps)
