@@ -23,32 +23,6 @@ async def generate_transcript(app: Dict[str, Any]) -> tuple[str, Dict[str, Any],
     app_description = app.get("description", "No description provided.")
     app_title = app.get("title", app_name)
     app_tags = app.get("tags", [])
-
-import os
-import logging
-import asyncio
-from typing import Dict, Any, List # Import List as well
-from agents.url_reader_agent import read_app_url
-from agents.github_reader_agent import get_repo_context
-from agents.llm import generate_script as call_llm_generate_script
-
-logging.basicConfig(level=logging.INFO)
-
-async def generate_transcript(app: Dict[str, Any]) -> tuple[str, Dict[str, Any], str]:
-    """
-    Generates a voiceover-ready transcript for an application, incorporating
-    content read either from its GitHub repository or live URL.
-    Returns the transcript string, a dictionary of source context, and a warning message.
-    """
-    # Use repo_url if available, otherwise fallback to url
-    repo_url = app.get("repo_url")
-    app_url = app.get("url") 
-    
-    app_name = app.get("name", "Unknown Application").replace('_', ' ').title()
-    app_full_name = app.get("full_name", app_name) # New: for GitHub full name
-    app_description = app.get("description", "No description provided.")
-    app_title = app.get("title", app_name) # Use 'title' from config if present, fallback to name
-    app_tags = app.get("tags", [])
     
     source_context: Dict[str, Any] = {
         "type": "N/A", 
