@@ -112,11 +112,12 @@ async def generate_transcript(app: dict) -> tuple[str, dict]:
                 table_summaries.append(f"Table with headers: {', '.join(table['headers'])}{table_caption}")
             prompt_parts.append(f"Visible Table Structures: {'; '.join(table_summaries)}")
         if page_content.get("raw_text"):
-            prompt_parts.append(f"Snippet of raw visible page text (for additional context): {page_content['raw_text']}")
+            # Provide raw text but instruct the LLM to filter aggressively
+            prompt_parts.append(f"Snippet of raw visible page text (for additional context, filter strictly for relevance to features): {page_content['raw_text']}")
     elif app_url and "Error" in page_content.get("title", ""):
         # If URL content is weak or inaccessible, instruct the LLM to rely on metadata and domain knowledge.
         # This instruction is *for the LLM*, not to be part of the final narration.
-        prompt_parts.append(f"\n\nIMPORTANT: The live application at '{app_url}' could not be fully accessed or yielded insufficient visible content. Therefore, generate the narration based SOLELY on the provided application title, description, and key themes/tags (domain knowledge). Do NOT mention the URL access issue in the final narration.")
+        prompt_parts.append(f"\n\nIMPORTANT: The live application at '{app_url}' could not be fully accessed or yielded insufficient visible content. Therefore, generate the narration based SOLELY on the provided application title, description, and key themes/tags (domain knowledge). Do NOT mention the URL access issue in the final narration. IGNORE any content in the raw text that does not appear to be directly relevant to the application's core functionality or features, such as footers, navigation, or unrelated site embeds.")
 
     final_prompt = "\n".join(prompt_parts)
     logging.info(f"Sending prompt to LLM (first 500 chars):\n---\n{final_prompt[:500]}...\n---\n")
