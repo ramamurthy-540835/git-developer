@@ -51,7 +51,7 @@ if not GEMINI_API_KEY:
     logging.error("GEMINI_API_KEY or GOOGLE_API_KEY environment variable not set. Please set it in .env.local.")
     exit(1)
 
-genai.configure(api_key=GEMINI_API_KEY)
+genai.set_api_key(GEMINI_API_KEY)
 model = genai.GenerativeModel(GEMINI_MODEL_NAME)
 
 def generate_readme_content(repo_metadata: Dict[str, Any], github_repo_context: Optional[Dict[str, Any]] = None) -> str:
