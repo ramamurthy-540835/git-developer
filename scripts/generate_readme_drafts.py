@@ -535,6 +535,36 @@ def publish_file_to_github(
         
         return {"status": "FAILED", "file_path": file_path_str, "reason": f"HTTPError {e.response.status_code}: {error_details}"}
     except requests.exceptions.RequestException as e:
+        # Check for specific "Branch not found" error when it's an API PUT failure
+        if isinstance(e, requests.exceptions.HTTPError) and e.response.status_code == 404 and "Branch main not found" in e.response.json().get('message', ''):
+            logging.warning(f"Branch '{branch}' not found for '{full_github_repo}'. Attempting to detect default branch...")
+            repo_api_url = f"https://api.github.com/repos/{full_github_repo}"
+            try:
+                repo_info_response = requests.get(repo_api_url, headers=headers)
+                repo_info_response.raise_for_status()
+                repo_info = repo_info_response.json()
+                default_branch = repo_info.get('default_branch')
+
+                if default_branch and default_branch != branch:
+                    logging.info(f"Detected default branch as '{default_branch}'. Retrying publish to '{default_branch}'.")
+                    # Update payload and retry with the correct default branch
+                    payload["branch"] = default_branch
+                    commit_message_action = "add" if file_path_str == "README.md" else "create"
+                    commit_message_type = "docs" if file_path_str.startswith("docs/") or file_path_str == "README.md" else "feat"
+                    payload["message"] = f"{commit_message_type}: {commit_message_action} {file_path_str}"
+                    
+                    retry_response = requests.put(url, headers=headers, json=payload)
+                    retry_response.raise_for_status()
+                    logging.info(f"Successfully {action_performed} '{file_path_str}' for '{full_github_repo}' on branch '{default_branch}' after branch detection.")
+                    return {"status": "SUCCESS", "action": action_performed, "file_path": file_path_str, "retried_branch": True}
+                else:
+                    logging.warning(f"Could not determine a different default branch or default branch is still '{branch}'.")
+
+            except requests.exceptions.RequestException as retry_e:
+                logging.error(f"Error during default branch detection or retry for '{full_github_repo}': {retry_e}", exc_info=True)
+            except Exception as retry_e:
+                logging.error(f"Unexpected error during default branch detection or retry for '{full_github_repo}': {retry_e}", exc_info=True)
+
         logging.error(f"Failed to publish '{file_path_str}' for '{full_github_repo}': {e}")
         return {"status": "FAILED", "file_path": file_path_str, "reason": f"API PUT failed: {e}"}
     except Exception as e:
