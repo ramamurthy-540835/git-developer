@@ -42,28 +42,6 @@ export default function EditorPage() {
         throw new Error(errorData.detail || `HTTP error! status: ${transcriptResponse.status}`);
       }
 
-      // First, fetch the specific app's details from the backend
-      const appDetailsResponse = await fetch(`http://10.100.15.44:8000/api/apps/${appName}`);
-      if (!appDetailsResponse.ok) {
-        const errorData = await appDetailsResponse.json();
-        throw new Error(errorData.detail || `Failed to fetch app details! status: ${appDetailsResponse.status}`);
-      }
-      const appData = await appDetailsResponse.json();
-      
-      // Then, use the fetched appData to request the transcript
-      const transcriptResponse = await fetch('http://10.100.15.44:8000/api/transcript', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ app: appData }),
-      });
-
-      if (!transcriptResponse.ok) {
-        const errorData = await transcriptResponse.json();
-        throw new Error(errorData.detail || `HTTP error! status: ${transcriptResponse.status}`);
-      }
-
       const transcriptData = await transcriptResponse.json();
       
       setTranscript(transcriptData.transcript);
