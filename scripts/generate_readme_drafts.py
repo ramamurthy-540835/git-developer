@@ -287,55 +287,82 @@ def main():
         output_dir.mkdir(parents=True, exist_ok=True)
         output_file = output_dir / "README.md"
 
-        # Check if README needs generation based on --force and existence
-        if output_file.exists() and not args.force:
-            logging.info(f"SKIP existing: README for '{full_name}' already exists at '{output_file}' (use --force to overwrite).")
-            report["skipped_local"].append({"full_name": full_name, "reason": "README exists, --force not used"})
-            report["summary"]["skipped_local_count"] += 1
-            continue
-        
-        logging.info(f"Processing README for '{full_name}'...")
+        logging.info(f"Processing '{full_name}'...")
 
-        # Get GitHub token safely (already checked if --publish is true)
-        github_token = os.environ.get("GITHUB_TOKEN") if args.publish else None
-
-        # Try to extract owner and repo name from full_name for GitHub API
-        owner_name_match = re.match(r"([^/]+)/([^/]+)", full_name)
-        if not owner_name_match:
-            logging.error(f"Invalid full_name format '{full_name}'. Skipping.")
-            report["failed"].append({"full_name": full_name, "reason": "Invalid full_name format"})
-            report["summary"]["failed_count"] += 1
-            continue
-        owner, repo_name = owner_name_match.groups()
-
-
-        github_repo_context = None
-        if github_reader_agent: # Only attempt if agent was loaded successfully
-            try:
-                github_repo_context = github_reader_agent(repo_url)
-                # Check for error from github_reader_agent itself
-                if "Error" in github_repo_context.get("name", ""):
-                    logging.warning(f"Could not fetch GitHub repo context for {full_name}: {github_repo_context.get('description', '')}. Generating README from metadata only.")
-                    github_repo_context = None
-            except Exception as e:
-                logging.warning(f"Failed to get GitHub repo context for {full_name}: {e}. Generating README from metadata only.", exc_info=True)
-                github_repo_context = None
-        else:
-            logging.info(f"GitHub reader agent not available. Generating README for {full_name} from metadata only.")
-        
+        # Initialize content generation status and output file info
         readme_content = ""
-        retries = 3
-        for i in range(retries):
-            try:
-                readme_content = generate_readme_content(repo_metadata, github_repo_context)
-                if readme_content:
-                    break # Success, exit retry loop
-            except Exception as e:
-                logging.warning(f"Gemini generation attempt {i+1}/{retries} failed for '{full_name}': {e}. Retrying in 5 seconds...")
-                time.sleep(5) # Wait before retrying
+        local_readme_exists = output_file.exists()
+        generated_new_content_locally = False # Flag to track if Gemini was called and saved locally
         
-        if readme_content:
-            # 1. Save locally
+        # Determine if we need to generate new content or use existing local
+        if local_readme_exists and not args.force:
+            if args.publish:
+                # If local README exists, not forcing, but publishing, read existing local content
+                try:
+                    with open(output_file, "r") as f:
+                        readme_content = f.read()
+                    logging.info(f"SKIP generation: Using existing local README for '{full_name}' for publishing.")
+                    report["skipped_local"].append({"full_name": full_name, "reason": "Using existing local for publish"})
+                    report["summary"]["skipped_local_count"] += 1
+                except Exception as e:
+                    logging.error(f"Failed to read existing local README for '{full_name}': {e}", exc_info=True)
+                    report["failed"].append({"full_name": full_name, "reason": f"Failed to read existing local README: {e}"})
+                    report["summary"]["failed_count"] += 1
+                    continue # Cannot proceed without content
+            else:
+                # If local exists, not forcing, and not publishing, skip completely
+                logging.info(f"SKIP existing: README for '{full_name}' already exists at '{output_file}' (use --force to overwrite or --publish to publish existing).")
+                report["skipped_local"].append({"full_name": full_name, "reason": "README exists, skipping"})
+                report["summary"]["skipped_local_count"] += 1
+                continue # Skip to next repo
+        
+        # If readme_content is not yet available (meaning we need to generate it)
+        if not readme_content:
+            # Get GitHub token safely (only relevant for agent itself, not publishing here)
+            github_token_for_agent = os.environ.get("GITHUB_TOKEN") 
+            if not github_token_for_agent and github_reader_agent:
+                 logging.warning(f"GITHUB_TOKEN not set for '{full_name}'. GitHub reader agent may not function correctly.")
+
+            # Try to extract owner and repo name from full_name for GitHub API
+            owner_name_match = re.match(r"([^/]+)/([^/]+)", full_name)
+            if not owner_name_match:
+                logging.error(f"Invalid full_name format '{full_name}'. Skipping.")
+                report["failed"].append({"full_name": full_name, "reason": "Invalid full_name format"})
+                report["summary"]["failed_count"] += 1
+                continue
+            owner, repo_name = owner_name_match.groups()
+
+            github_repo_context = None
+            if github_reader_agent: # Only attempt if agent was loaded successfully
+                try:
+                    github_repo_context = github_reader_agent(repo_url)
+                    if "Error" in github_repo_context.get("name", ""):
+                        logging.warning(f"Could not fetch GitHub repo context for {full_name}: {github_repo_context.get('description', '')}. Generating README from metadata only.")
+                        github_repo_context = None
+                except Exception as e:
+                    logging.warning(f"Failed to get GitHub repo context for {full_name}: {e}. Generating README from metadata only.", exc_info=True)
+                    github_repo_context = None
+            else:
+                logging.info(f"GitHub reader agent not available. Generating README for {full_name} from metadata only.")
+            
+            retries = 3
+            for i in range(retries):
+                try:
+                    readme_content = generate_readme_content(repo_metadata, github_repo_context)
+                    if readme_content:
+                        generated_new_content_locally = True # Mark as newly generated
+                        break # Success, exit retry loop
+                except Exception as e:
+                    logging.warning(f"Gemini generation attempt {i+1}/{retries} failed for '{full_name}': {e}. Retrying in 5 seconds...")
+                    time.sleep(5) # Wait before retrying
+            
+            if not readme_content:
+                logging.error(f"Failed to generate content for README for '{full_name}' after {retries} attempts.")
+                report["failed"].append({"full_name": full_name, "reason": "Failed to generate content from Gemini"})
+                report["summary"]["failed_count"] += 1
+                continue # Cannot proceed without content
+            
+            # Save newly generated content locally
             try:
                 with open(output_file, "w") as f:
                     f.write(readme_content)
@@ -346,30 +373,42 @@ def main():
                 logging.error(f"Failed to save local README for '{full_name}' to '{output_file}': {e}", exc_info=True)
                 report["failed"].append({"full_name": full_name, "reason": f"Failed to save local file: {e}"})
                 report["summary"]["failed_count"] += 1
-                # If local save fails, don't attempt to publish
-                continue 
+                continue # If local save fails, don't attempt to publish
 
-            # 2. Optionally publish to GitHub
-            if args.publish:
-                publish_result = publish_readme_to_github(
-                    owner, repo_name, readme_content, github_token, args.branch, args.dry_run
-                )
-                if publish_result["status"] == "SUCCESS":
-                    if publish_result["action"] == "created":
-                        report["published_created"].append({"full_name": full_name, "path": str(output_file)})
-                        report["summary"]["published_created_count"] += 1
-                    elif publish_result["action"] == "updated":
-                        report["published_updated"].append({"full_name": full_name, "path": str(output_file)})
-                        report["summary"]["published_updated_count"] += 1
-                elif publish_result["status"] == "DRY_RUN_SUCCESS":
-                    logging.info(f"DRY RUN: README for '{full_name}' would have been published.")
-                else: # FAILED
-                    report["failed"].append({"full_name": full_name, "reason": f"GitHub publish failed: {publish_result.get('reason', 'Unknown error')}"})
-                    report["summary"]["failed_count"] += 1
-        else:
-            logging.error(f"Failed to generate content for README for '{full_name}' after {retries} attempts.")
-            report["failed"].append({"full_name": full_name, "reason": "Failed to generate content from Gemini"})
-            report["summary"]["failed_count"] += 1
+        # At this point, readme_content holds valid content (either freshly generated and saved, or read from existing local file).
+        # And if it was freshly generated, it's already saved locally.
+
+        # Now, optionally publish to GitHub
+        if args.publish and readme_content: 
+            # Re-extract owner/repo for publish_readme_to_github as owner/repo_name are only available in this scope
+            owner_name_match = re.match(r"([^/]+)/([^/]+)", full_name)
+            if not owner_name_match: # Should ideally not happen if it passed earlier check
+                logging.error(f"Internal error: Invalid full_name format '{full_name}' during publish. Skipping publish.")
+                report["failed"].append({"full_name": full_name, "reason": "Internal error: Invalid full_name format for publish"})
+                report["summary"]["failed_count"] += 1
+                continue
+            owner, repo_name = owner_name_match.groups()
+
+            # Get GitHub token specifically for publishing
+            github_token = os.environ.get("GITHUB_TOKEN") 
+
+            publish_result = publish_readme_to_github(
+                owner, repo_name, readme_content, github_token, args.branch, args.dry_run
+            )
+            if publish_result["status"] == "SUCCESS":
+                if publish_result["action"] == "created":
+                    report["published_created"].append({"full_name": full_name, "path": str(output_file)})
+                    report["summary"]["published_created_count"] += 1
+                elif publish_result["action"] == "updated":
+                    report["published_updated"].append({"full_name": full_name, "path": str(output_file)})
+                    report["summary"]["published_updated_count"] += 1
+            elif publish_result["status"] == "DRY_RUN_SUCCESS":
+                logging.info(f"DRY RUN: README for '{full_name}' would have been published.")
+                # For dry run, we don't update counts for created/updated
+            else: # FAILED
+                report["failed"].append({"full_name": full_name, "reason": f"GitHub publish failed: {publish_result.get('reason', 'Unknown error')}"})
+                report["summary"]["failed_count"] += 1
+        # else: if args.publish is false, nothing happens here.
 
     # Save final report
     with open(report_file_path, "w") as f:
