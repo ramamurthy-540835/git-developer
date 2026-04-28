@@ -418,6 +418,57 @@ def publish_file_to_github(
     except requests.exceptions.HTTPError as e:
         error_details = e.response.json().get('message', str(e))
         logging.error(f"Failed to publish '{file_path_str}' for '{full_github_repo}': HTTPError {e.response.status_code} - {error_details}")
+        
+        # New error handling specifically for the 409 conflict: file blocking directory creation
+        if e.response.status_code == 409 and "file exists where you’re trying to create a subdirectory" in error_details:
+            logging.warning(f"Conflict detected: A file is blocking directory creation for '{file_path_str}'. Attempting to resolve...")
+            
+            # The conflicting path is the parent directory (e.g., 'docs' for 'docs/architecture.mmd').
+            parent_dir_path_in_repo = file_path_in_repo.parent
+            
+            # Ensure it's not trying to delete the root of the repo (empty path or '.' for current dir)
+            if parent_dir_path_in_repo and str(parent_dir_path_in_repo) != '.':
+                conflicting_path_str = str(parent_dir_path_in_repo)
+                conflicting_url = f"https://api.github.com/repos/{full_github_repo}/contents/{conflicting_path_str}"
+
+                # 1. Get SHA of the conflicting file (e.g., 'docs')
+                try:
+                    get_response = requests.get(conflicting_url, headers=headers)
+                    if get_response.status_code == 200:
+                        conflicting_file_data = get_response.json()
+                        # Ensure it's a file, not a directory before attempting to delete
+                        if conflicting_file_data.get('type') == 'file':
+                            conflicting_sha = conflicting_file_data['sha']
+                            logging.info(f"Found conflicting file at '{conflicting_path_str}' with SHA: {conflicting_sha}. Attempting to delete it.")
+
+                            # 2. Attempt to delete the conflicting file
+                            delete_payload = {
+                                "message": f"chore: delete conflicting file '{conflicting_path_str}' to enable directory creation",
+                                "sha": conflicting_sha,
+                                "branch": branch
+                            }
+                            delete_response = requests.delete(conflicting_url, headers=headers, json=delete_payload)
+                            delete_response.raise_for_status()
+                            logging.info(f"Successfully deleted conflicting file '{conflicting_path_str}'. Retrying original publish.")
+
+                            # 3. Retry the original PUT operation
+                            retry_response = requests.put(url, headers=headers, json=payload)
+                            retry_response.raise_for_status()
+                            logging.info(f"Successfully {action_performed} '{file_path_str}' for '{full_github_repo}' on branch '{branch}' after conflict resolution.")
+                            return {"status": "SUCCESS", "action": action_performed, "file_path": file_path_str, "retried": True}
+                        else:
+                            logging.warning(f"Conflicting path '{conflicting_path_str}' is not a file (it's a {conflicting_file_data.get('type')}). Cannot resolve conflict automatically by deletion.")
+                    elif get_response.status_code == 404:
+                        logging.warning(f"Conflicting file at '{conflicting_path_str}' not found during re-check, despite 409. This is unexpected. Not attempting delete.")
+                    else:
+                        logging.warning(f"Could not retrieve conflicting file info for '{conflicting_path_str}': {get_response.status_code} - {get_response.text}. Cannot resolve conflict automatically.")
+                except requests.exceptions.RequestException as retry_e:
+                    logging.error(f"Error during conflict resolution (GET/DELETE) for '{file_path_str}': {retry_e}", exc_info=True)
+                except Exception as retry_e:
+                    logging.error(f"Unexpected error during conflict resolution (GET/DELETE) for '{file_path_str}': {retry_e}", exc_info=True)
+            else:
+                logging.warning(f"Conflicting path for '{file_path_str}' is at repository root or empty. Automatic deletion of root-level conflicting files is not supported to prevent accidental repo damage.")
+        
         return {"status": "FAILED", "file_path": file_path_str, "reason": f"HTTPError {e.response.status_code}: {error_details}"}
     except requests.exceptions.RequestException as e:
         logging.error(f"Failed to publish '{file_path_str}' for '{full_github_repo}': {e}")
