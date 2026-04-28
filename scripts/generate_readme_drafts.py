@@ -2,17 +2,40 @@ import os
 import argparse
 import logging
 import yaml
+import os
+import argparse
+import logging
+import yaml
 import re
 from pathlib import Path
 from dotenv import load_dotenv
-from typing import Dict, Any, Optional # Import Dict, Any, and Optional
+from typing import Dict, Any, Optional, List
+import sys
+import json
+import time
 
-# Ensure google.generativeai is imported, potentially using a shared LLM agent later
+# Automatically add project root to sys.path
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT))
+
+# Ensure google.generativeai is imported
 try:
     import google.generativeai as genai
 except ImportError:
     logging.error("google-generativeai not found. Please install it: pip install google-generativeai")
-    exit(1)
+    sys.exit(1)
+
+# Import github_reader_agent safely after sys.path fix
+github_reader_agent = None
+try:
+    from agents.github_reader_agent import get_repo_context
+    github_reader_agent = get_repo_context
+except ImportError:
+    logging.warning("agents.github_reader_agent not found. GitHub repository context will not be used for README generation.")
+except Exception as e:
+    logging.warning(f"Failed to load github_reader_agent: {e}. GitHub repository context will not be used for README generation.")
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -31,63 +54,63 @@ model = genai.GenerativeModel(GEMINI_MODEL_NAME)
 
 def generate_readme_content(repo_metadata: Dict[str, Any], github_repo_context: Optional[Dict[str, Any]] = None) -> str:
     """
-    Generates a README markdown content using Gemini based on repository metadata and context.
+    Generates a concise and practical README markdown content using Gemini,
+    based on repository metadata and, if available, GitHub repository context.
     """
     repo_name = repo_metadata.get("name", "Unnamed Project").replace('-', ' ').replace('_', ' ').title()
     full_name = repo_metadata.get("full_name", "owner/repo")
-    description = repo_metadata.get("description", "A project without a specific description.")
-    repo_url = repo_metadata.get("repo_url", "N/A")
-    language = repo_metadata.get("language", "N/A")
+    description = repo_metadata.get("description", "A comprehensive project.")
+    repo_url = repo_metadata.get("repo_url", "https://github.com/owner/repo")
+    language = repo_metadata.get("language", "Not specified")
     tags = ", ".join(repo_metadata.get("tags", [])) if repo_metadata.get("tags") else "N/A"
 
     prompt_parts = [
-        f"You are an expert technical writer and developer advocate. Your task is to generate a professional, comprehensive, and engaging README.md in markdown format for a GitHub repository.",
-        f"The README should clearly explain the project's purpose, key features, technical stack, architecture, demo workflow, how to run it locally, and deployment notes.",
-        f"Project Title: {repo_name}",
-        f"Repository Full Name: {full_name}",
-        f"Repository URL: {repo_url}",
+        f"Generate ONLY a professional and practical GitHub README.md in markdown format. Do not include any extra commentary, introductory/concluding remarks, or non-markdown text.",
+        f"The README should clearly explain the project and be structured with the following sections:",
+        f"# {repo_name}",
+        f"## Overview",
+        f"## Business Problem",
+        f"## Key Capabilities",
+        f"## Architecture",
+        f"## Tech Stack",
+        f"## Repository Structure",
+        f"## Local Setup",
+        f"## Deployment",
+        f"## Demo Workflow",
+        f"## Future Enhancements",
+        f"\nUse the following information to populate the sections:",
+        f"Project Name: {repo_name}",
+        f"Full GitHub Name: {full_name}",
+        f"GitHub URL: {repo_url}",
         f"Primary Description: {description}",
-        f"Primary Language: {language}",
+        f"Main Language: {language}",
     ]
 
     if tags != "N/A":
         prompt_parts.append(f"Key Themes/Tags: {tags}")
 
     if github_repo_context:
-        prompt_parts.append("\n\n--- Additional GitHub Repository Context ---\n")
+        prompt_parts.append("\n--- Additional Repository Context (integrate this information) ---")
         if github_repo_context.get("readme") and github_repo_context["readme"] != "No README.md found.":
-            prompt_parts.append(f"Existing README content (if available for enrichment): {github_repo_context['readme']}")
+            prompt_parts.append(f"Existing README content (for enrichment/reference, do not simply copy): {github_repo_context['readme']}")
         if github_repo_context.get("tech_stack"):
-            prompt_parts.append(f"Detected Technical Stack from codebase: {', '.join(github_repo_context['tech_stack'])}")
+            prompt_parts.append(f"Detected Technologies from codebase: {', '.join(github_repo_context['tech_stack'])}")
         if github_repo_context.get("features"):
             prompt_parts.append(f"Inferred Features/Capabilities from codebase: {', '.join(github_repo_context['features'])}")
         if github_repo_context.get("files"):
-            prompt_parts.append(f"Top-level files/folders in repository: {', '.join(github_repo_context['files'])}")
-        
-        prompt_parts.append("\n\nBased on this context, deduce the project's architecture, expected UI flows, how to run it, and deployment patterns.")
-    
-    prompt_parts.append("\n\nGenerate the README following these sections in markdown. Provide concrete examples where appropriate:")
-    prompt_parts.append("- # Project Title (use the project name, e.g., # Value-Based Care Dashboard)")
-    prompt_parts.append("- ## Overview (briefly explain what it is)")
-    prompt_parts.append("- ## The Business Problem (what challenge does it solve)")
-    prompt_parts.append("- ## Key Capabilities / Features (list and briefly describe main features)")
-    prompt_parts.append("- ## Tech Stack (list core technologies)")
-    prompt_parts.append("- ## Architecture (high-level design, main components, how they interact)")
-    prompt_parts.append("- ## Demo Workflow (step-by-step example of how to use it)")
-    prompt_parts.append("- ## Getting Started (how to run it locally, prerequisites)")
-    prompt_parts.append("- ## Deployment (brief notes on how to deploy)")
-    prompt_parts.append("- ## Future Enhancements (potential next steps)")
-    prompt_parts.append("\nDo not include any conversational text outside of the README markdown itself. Ensure all sections are present.")
-
+            prompt_parts.append(f"Top-level files and directories in repository: {', '.join(github_repo_context['files'])}")
+        prompt_parts.append("Deduce Architecture, Local Setup, Deployment, and Demo Workflow details from this context.")
+    else:
+        prompt_parts.append("\n--- IMPORTANT: No GitHub repository context was available. Generate the README using only the provided metadata. ---")
 
     full_prompt = "\n".join(prompt_parts)
-    logging.debug(f"Sending prompt to LLM:\n{full_prompt}")
+    logging.debug(f"Sending prompt to LLM (first 500 chars):\n{full_prompt[:500]}...")
 
     try:
         response = model.generate_content(full_prompt)
         return response.text.strip()
     except Exception as e:
-        logging.error(f"Error generating README for {full_name} with Gemini: {e}")
+        logging.error(f"Gemini generation failed for {full_name}: {e}", exc_info=True)
         return ""
 
 def main():
@@ -95,6 +118,9 @@ def main():
     parser.add_argument("--repo", type=str, help="Generate README for a specific repo by its full name (e.g., owner/repo).")
     parser.add_argument("--all", action="store_true", help="Generate READMEs for all relevant repos in config/repos.yaml.")
     parser.add_argument("--force", action="store_true", help="Overwrite existing generated READMEs.")
+    parser.add_argument("--limit", type=int, default=0, help="Limit the number of repositories to process when --all is used.")
+    parser.add_argument("--missing-only", action="store_true", 
+                        help="Generate READMEs only for repos with 'No README found' in description or readme_available=false/missing.")
     args = parser.parse_args()
 
     if not args.repo and not args.all:
@@ -103,7 +129,7 @@ def main():
     repos_config_path = Path("config/repos.yaml")
     if not repos_config_path.exists():
         logging.error(f"Error: {repos_config_path} not found. Please ensure it exists.")
-        exit(1)
+        sys.exit(1)
 
     try:
         with open(repos_config_path, "r") as f:
@@ -111,11 +137,17 @@ def main():
         all_repos = repos_data.get("repos", [])
     except yaml.YAMLError as e:
         logging.error(f"Error parsing {repos_config_path}: {e}")
-        exit(1)
+        sys.exit(1)
 
-    generated_count = 0
-    skipped_count = 0
-    failed_count = 0
+    # Initialize report
+    report = {
+        "generated": [],
+        "skipped": [],
+        "failed": [],
+        "summary": {"generated_count": 0, "skipped_count": 0, "failed_count": 0}
+    }
+    report_file_path = Path("generated_readmes") / "report.json"
+    report_file_path.parent.mkdir(parents=True, exist_ok=True)
 
     repos_to_process = []
     if args.repo:
@@ -127,16 +159,30 @@ def main():
                 break
         if not found:
             logging.error(f"Repository '{args.repo}' not found in {repos_config_path}.")
-            exit(1)
+            sys.exit(1)
     elif args.all:
         repos_to_process = all_repos
+        if args.missing_only:
+            initial_count = len(repos_to_process)
+            repos_to_process = [
+                r for r in repos_to_process if 
+                ("No README found" in r.get("description", "") or 
+                 r.get("readme_available", True) == False or # If missing, assume True until fetched
+                 r.get("readme_available") is None)
+            ]
+            logging.info(f"Filtering for missing READMEs: {len(repos_to_process)} out of {initial_count} repos will be processed.")
+
+    if args.limit > 0:
+        repos_to_process = repos_to_process[:args.limit]
+        logging.info(f"Limiting processing to {args.limit} repositories.")
 
     for repo_metadata in repos_to_process:
         full_name = repo_metadata.get("full_name")
         repo_url = repo_metadata.get("repo_url")
         if not full_name or not repo_url:
             logging.warning(f"Skipping repo with missing full_name or repo_url: {repo_metadata.get('name', 'Unknown')}")
-            skipped_count += 1
+            report["skipped"].append({"full_name": full_name, "reason": "Missing full_name or repo_url"})
+            report["summary"]["skipped_count"] += 1
             continue
 
         owner, name = full_name.split('/')
@@ -144,63 +190,62 @@ def main():
         output_dir.mkdir(parents=True, exist_ok=True)
         output_file = output_dir / "README.md"
 
-        # Check if README needs generation
-        should_generate = False
-        if args.force:
-            should_generate = True
-        elif not output_file.exists():
-            should_generate = True
-        elif (repo_metadata.get("description") and "No README found" in repo_metadata["description"]) or \
-             (repo_metadata.get("readme_available") == False):
-            should_generate = True
-        elif repo_metadata.get("readme_available") is None: # If field is missing, assume it needs update
-            should_generate = True
-        
-        if not should_generate:
-            logging.info(f"Skipping '{full_name}': README already exists at '{output_file}' (use --force to overwrite).")
-            skipped_count += 1
+        # Check if README needs generation based on --force and existence
+        if output_file.exists() and not args.force:
+            logging.info(f"SKIP existing: README for '{full_name}' already exists at '{output_file}' (use --force to overwrite).")
+            report["skipped"].append({"full_name": full_name, "reason": "README exists, --force not used"})
+            report["summary"]["skipped_count"] += 1
             continue
+        
+        logging.info(f"Processing README for '{full_name}'...")
 
-        logging.info(f"Generating README for '{full_name}'...")
-
-        # Optional: Fetch GitHub repo context for richer README generation
-        # This part assumes github_reader_agent can be called from here.
-        # If github_reader_agent is an async function, you'd need an asyncio loop.
-        # For simplicity, if github_reader_agent is synchronous, you can call it directly.
-        # For now, let's assume get_repo_context is synchronous as defined in the chat history.
         github_repo_context = None
-        try:
-            from agents.github_reader_agent import get_repo_context
-            github_repo_context = get_repo_context(repo_url)
-            if "Error" in github_repo_context.get("name", ""):
-                logging.warning(f"Could not fetch GitHub repo context for {full_name}: {github_repo_context.get('description', '')}. Generating README from metadata only.")
-                github_repo_context = None # Reset to ensure it's not used if there's an error
-        except ImportError:
-            logging.warning("agents.github_reader_agent not found. Skipping dynamic repo context enrichment.")
-        except Exception as e:
-            logging.warning(f"Failed to get GitHub repo context for {full_name}: {e}. Generating README from metadata only.")
-            github_repo_context = None
-
-
-        readme_content = generate_readme_content(repo_metadata, github_repo_context)
-
+        if github_reader_agent:
+            try:
+                github_repo_context = github_reader_agent(repo_url)
+                if "Error" in github_repo_context.get("name", ""):
+                    logging.warning(f"Could not fetch GitHub repo context for {full_name}: {github_repo_context.get('description', '')}. Generating README from metadata only.")
+                    github_repo_context = None
+            except Exception as e:
+                logging.warning(f"Failed to get GitHub repo context for {full_name}: {e}. Generating README from metadata only.", exc_info=True)
+                github_repo_context = None
+        
+        readme_content = ""
+        retries = 3
+        for i in range(retries):
+            try:
+                readme_content = generate_readme_content(repo_metadata, github_repo_context)
+                if readme_content:
+                    break # Success, exit retry loop
+            except Exception as e:
+                logging.warning(f"Gemini generation attempt {i+1}/{retries} failed for '{full_name}': {e}. Retrying in 5 seconds...")
+                time.sleep(5) # Wait before retrying
+        
         if readme_content:
             try:
                 with open(output_file, "w") as f:
                     f.write(readme_content)
                 logging.info(f"Successfully generated README for '{full_name}' at '{output_file}'.")
-                generated_count += 1
+                report["generated"].append({"full_name": full_name, "path": str(output_file)})
+                report["summary"]["generated_count"] += 1
             except Exception as e:
-                logging.error(f"Failed to save README for '{full_name}' to '{output_file}': {e}")
-                failed_count += 1
+                logging.error(f"Failed to save README for '{full_name}' to '{output_file}': {e}", exc_info=True)
+                report["failed"].append({"full_name": full_name, "reason": f"Failed to save file: {e}"})
+                report["summary"]["failed_count"] += 1
         else:
-            logging.error(f"Failed to generate content for README for '{full_name}'.")
-            failed_count += 1
+            logging.error(f"Failed to generate content for README for '{full_name}' after {retries} attempts.")
+            report["failed"].append({"full_name": full_name, "reason": "Failed to generate content from Gemini"})
+            report["summary"]["failed_count"] += 1
+
+    # Save final report
+    with open(report_file_path, "w") as f:
+        json.dump(report, f, indent=2)
 
     print("\n--- README Generation Report ---")
-    print(f"Generated: {generated_count}")
-    print(f"Skipped: {skipped_count}")
-    print(f"Failed: {failed_count}")
+    print(f"Generated: {report['summary']['generated_count']}")
+    print(f"Skipped: {report['summary']['skipped_count']}")
+    print(f"Failed: {report['summary']['failed_count']}")
+    print(f"Full report saved to: {report_file_path}")
 
 if __name__ == "__main__":
     main()
