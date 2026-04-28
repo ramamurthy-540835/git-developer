@@ -70,6 +70,24 @@ def create_genai_client():
 
 client = create_genai_client()
 
+def get_default_branch(owner: str, repo_name: str, github_token: str) -> Optional[str]:
+    """
+    Fetches the default branch name for a given repository from the GitHub API.
+    """
+    url = f"https://api.github.com/repos/{owner}/{repo_name}"
+    headers = {
+        "Authorization": f"token {github_token}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        repo_info = response.json()
+        return repo_info.get('default_branch')
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Failed to fetch default branch for '{owner}/{repo_name}': {e}", exc_info=True)
+        return None
+
 def generate_readme_content(repo_metadata: Dict[str, Any], github_repo_context: Optional[Dict[str, Any]] = None) -> str:
     """
     Generates a concise and practical README markdown content using Gemini,
@@ -420,106 +438,113 @@ def publish_file_to_github(
     """
     full_github_repo = f"{owner}/{repo_name}"
     file_path_str = str(file_path_in_repo)
-    url = f"https://api.github.com/repos/{full_github_repo}/contents/{file_path_str}"
     headers = {
         "Authorization": f"token {github_token}",
         "Accept": "application/vnd.github.v3+json"
     }
     
-    commit_message_action = "add" if file_path_str == "README.md" else "create"
-    commit_message_type = "docs" if file_path_str.startswith("docs/") or file_path_str == "README.md" else "feat" # Default
-    commit_message = f"{commit_message_type}: {commit_message_action} {file_path_str}"
+    # Determine the effective branch to use
+    effective_branch = branch
+    if not effective_branch or effective_branch == "main": # If branch is not specified or defaults to "main"
+        detected_default = get_default_branch(owner, repo_name, github_token)
+        if detected_default:
+            effective_branch = detected_default
+            logging.info(f"Using auto-detected default branch '{effective_branch}' for '{full_github_repo}'.")
+        elif not effective_branch: # If no branch was specified and detection failed, default to "main"
+            effective_branch = "main"
+            logging.warning(f"Could not auto-detect default branch for '{full_github_repo}'. Falling back to 'main'.")
 
-    logging.debug(f"Attempting to publish {file_path_str} to {full_github_repo}/{branch} (dry_run={dry_run})")
+    logging.debug(f"Attempting to publish {file_path_str} to {full_github_repo} on branch '{effective_branch}' (dry_run={dry_run})")
 
     if dry_run:
-        logging.info(f"DRY RUN: Would publish/update '{file_path_str}' for '{full_github_repo}' on branch '{branch}'.")
-        return {"status": "DRY_RUN_SUCCESS", "file_path": file_path_str}
+        logging.info(f"DRY RUN: Would publish/update '{file_path_str}' for '{full_github_repo}' on branch '{effective_branch}'.")
+        return {"status": "DRY_RUN_SUCCESS", "file_path": file_path_str, "branch": effective_branch}
 
     sha = None
     action_performed = "created" # Default to created
     
+    # URL for GET request (with ref parameter)
+    get_url = f"https://api.github.com/repos/{full_github_repo}/contents/{file_path_str}?ref={effective_branch}"
+    # URL for PUT/DELETE requests (without ref parameter)
+    put_delete_url = f"https://api.github.com/repos/{full_github_repo}/contents/{file_path_str}"
+
     try:
-        # Check if file exists to get its SHA
-        response = requests.get(url, headers=headers)
+        # Check if file exists to get its SHA on the effective branch
+        response = requests.get(get_url, headers=headers)
         if response.status_code == 200:
             file_data = response.json()
             sha = file_data['sha']
-            logging.debug(f"'{file_path_str}' exists for '{full_github_repo}', SHA: {sha}")
-            commit_message_action = "update"
-            commit_message = f"{commit_message_type}: {commit_message_action} {file_path_str}"
+            logging.debug(f"'{file_path_str}' exists for '{full_github_repo}' on branch '{effective_branch}', SHA: {sha}")
             action_performed = "updated"
         elif response.status_code == 404:
-            logging.debug(f"'{file_path_str}' does not exist for '{full_github_repo}'. Will create.")
-            # commit_message already set for 'add' or 'create'
+            logging.debug(f"'{file_path_str}' does not exist for '{full_github_repo}' on branch '{effective_branch}'. Will create.")
         else:
             response.raise_for_status() # Raise for other HTTP errors
 
     except requests.exceptions.RequestException as e:
-        logging.error(f"Failed to check existing '{file_path_str}' for '{full_github_repo}': {e}")
-        return {"status": "FAILED", "file_path": file_path_str, "reason": f"API check failed: {e}"}
+        logging.error(f"Failed to check existing '{file_path_str}' for '{full_github_repo}' on branch '{effective_branch}': {e}")
+        return {"status": "FAILED", "file_path": file_path_str, "reason": f"API GET failed: {e}"}
     except Exception as e: # Catch any other unexpected errors during the GET request
-        logging.error(f"An unexpected error occurred during check for existing '{file_path_str}' for '{full_github_repo}': {e}", exc_info=True)
+        logging.error(f"An unexpected error occurred during check for existing '{file_path_str}' for '{full_github_repo}' on branch '{effective_branch}': {e}", exc_info=True)
         return {"status": "FAILED", "file_path": file_path_str, "reason": f"Unexpected error during GET check: {type(e).__name__} - {e}"}
 
     # Prepare content for PUT request
     encoded_content = base64.b64encode(file_content.encode('utf-8')).decode('utf-8')
+    commit_message_action = "add" if action_performed == "created" else "update"
+    commit_message_type = "docs" if file_path_str.startswith("docs/") or file_path_str == "README.md" else "feat" # Default
+    commit_message = f"{commit_message_type}: {commit_message_action} {file_path_str}"
+
     payload = {
         "message": commit_message,
         "content": encoded_content,
-        "branch": branch
+        "branch": effective_branch # Always explicitly set the branch
     }
     if sha:
         payload["sha"] = sha
 
     try:
-        response = requests.put(url, headers=headers, json=payload)
+        response = requests.put(put_delete_url, headers=headers, json=payload)
         response.raise_for_status() # Raise for HTTP errors (4xx or 5xx)
         
-        logging.info(f"Successfully {action_performed} '{file_path_str}' for '{full_github_repo}' on branch '{branch}'.")
-        return {"status": "SUCCESS", "action": action_performed, "file_path": file_path_str}
+        logging.info(f"Successfully {action_performed} '{file_path_str}' for '{full_github_repo}' on branch '{effective_branch}'.")
+        return {"status": "SUCCESS", "action": action_performed, "file_path": file_path_str, "branch": effective_branch}
 
     except requests.exceptions.HTTPError as e:
         error_details = e.response.json().get('message', str(e))
-        logging.error(f"Failed to publish '{file_path_str}' for '{full_github_repo}': HTTPError {e.response.status_code} - {error_details}")
+        logging.error(f"Failed to publish '{file_path_str}' for '{full_github_repo}' on branch '{effective_branch}': HTTPError {e.response.status_code} - {error_details}")
         
-        # New error handling specifically for the 409 conflict: file blocking directory creation
+        # Error handling specifically for the 409 conflict: file blocking directory creation
         if e.response.status_code == 409 and "file exists where you’re trying to create a subdirectory" in error_details:
             logging.warning(f"Conflict detected: A file is blocking directory creation for '{file_path_str}'. Attempting to resolve...")
             
-            # The conflicting path is the parent directory (e.g., 'docs' for 'docs/architecture.mmd').
             parent_dir_path_in_repo = file_path_in_repo.parent
             
-            # Ensure it's not trying to delete the root of the repo (empty path or '.' for current dir)
             if parent_dir_path_in_repo and str(parent_dir_path_in_repo) != '.':
                 conflicting_path_str = str(parent_dir_path_in_repo)
                 conflicting_url = f"https://api.github.com/repos/{full_github_repo}/contents/{conflicting_path_str}"
 
-                # 1. Get SHA of the conflicting file (e.g., 'docs')
                 try:
                     get_response = requests.get(conflicting_url, headers=headers)
                     if get_response.status_code == 200:
                         conflicting_file_data = get_response.json()
-                        # Ensure it's a file, not a directory before attempting to delete
                         if conflicting_file_data.get('type') == 'file':
                             conflicting_sha = conflicting_file_data['sha']
                             logging.info(f"Found conflicting file at '{conflicting_path_str}' with SHA: {conflicting_sha}. Attempting to delete it.")
 
-                            # 2. Attempt to delete the conflicting file
                             delete_payload = {
                                 "message": f"chore: delete conflicting file '{conflicting_path_str}' to enable directory creation",
                                 "sha": conflicting_sha,
-                                "branch": branch
+                                "branch": effective_branch
                             }
                             delete_response = requests.delete(conflicting_url, headers=headers, json=delete_payload)
                             delete_response.raise_for_status()
                             logging.info(f"Successfully deleted conflicting file '{conflicting_path_str}'. Retrying original publish.")
 
-                            # 3. Retry the original PUT operation
-                            retry_response = requests.put(url, headers=headers, json=payload)
+                            # Retry the original PUT operation
+                            retry_response = requests.put(put_delete_url, headers=headers, json=payload)
                             retry_response.raise_for_status()
-                            logging.info(f"Successfully {action_performed} '{file_path_str}' for '{full_github_repo}' on branch '{branch}' after conflict resolution.")
-                            return {"status": "SUCCESS", "action": action_performed, "file_path": file_path_str, "retried": True}
+                            logging.info(f"Successfully {action_performed} '{file_path_str}' for '{full_github_repo}' on branch '{effective_branch}' after conflict resolution.")
+                            return {"status": "SUCCESS", "action": action_performed, "file_path": file_path_str, "branch": effective_branch, "retried_conflict": True}
                         else:
                             logging.warning(f"Conflicting path '{conflicting_path_str}' is not a file (it's a {conflicting_file_data.get('type')}). Cannot resolve conflict automatically by deletion.")
                     elif get_response.status_code == 404:
@@ -533,43 +558,13 @@ def publish_file_to_github(
             else:
                 logging.warning(f"Conflicting path for '{file_path_str}' is at repository root or empty. Automatic deletion of root-level conflicting files is not supported to prevent accidental repo damage.")
         
-        return {"status": "FAILED", "file_path": file_path_str, "reason": f"HTTPError {e.response.status_code}: {error_details}"}
+        return {"status": "FAILED", "file_path": file_path_str, "reason": f"HTTPError {e.response.status_code}: {error_details}", "branch": effective_branch}
     except requests.exceptions.RequestException as e:
-        # Check for specific "Branch not found" error when it's an API PUT failure
-        if isinstance(e, requests.exceptions.HTTPError) and e.response.status_code == 404 and "Branch main not found" in e.response.json().get('message', ''):
-            logging.warning(f"Branch '{branch}' not found for '{full_github_repo}'. Attempting to detect default branch...")
-            repo_api_url = f"https://api.github.com/repos/{full_github_repo}"
-            try:
-                repo_info_response = requests.get(repo_api_url, headers=headers)
-                repo_info_response.raise_for_status()
-                repo_info = repo_info_response.json()
-                default_branch = repo_info.get('default_branch')
-
-                if default_branch and default_branch != branch:
-                    logging.info(f"Detected default branch as '{default_branch}'. Retrying publish to '{default_branch}'.")
-                    # Update payload and retry with the correct default branch
-                    payload["branch"] = default_branch
-                    commit_message_action = "add" if file_path_str == "README.md" else "create"
-                    commit_message_type = "docs" if file_path_str.startswith("docs/") or file_path_str == "README.md" else "feat"
-                    payload["message"] = f"{commit_message_type}: {commit_message_action} {file_path_str}"
-                    
-                    retry_response = requests.put(url, headers=headers, json=payload)
-                    retry_response.raise_for_status()
-                    logging.info(f"Successfully {action_performed} '{file_path_str}' for '{full_github_repo}' on branch '{default_branch}' after branch detection.")
-                    return {"status": "SUCCESS", "action": action_performed, "file_path": file_path_str, "retried_branch": True}
-                else:
-                    logging.warning(f"Could not determine a different default branch or default branch is still '{branch}'.")
-
-            except requests.exceptions.RequestException as retry_e:
-                logging.error(f"Error during default branch detection or retry for '{full_github_repo}': {retry_e}", exc_info=True)
-            except Exception as retry_e:
-                logging.error(f"Unexpected error during default branch detection or retry for '{full_github_repo}': {retry_e}", exc_info=True)
-
-        logging.error(f"Failed to publish '{file_path_str}' for '{full_github_repo}': {e}")
-        return {"status": "FAILED", "file_path": file_path_str, "reason": f"API PUT failed: {e}"}
+        logging.error(f"Failed to publish '{file_path_str}' for '{full_github_repo}' on branch '{effective_branch}': {e}")
+        return {"status": "FAILED", "file_path": file_path_str, "reason": f"API PUT failed: {e}", "branch": effective_branch}
     except Exception as e:
-        logging.error(f"An unexpected error occurred during publishing '{file_path_str}' for '{full_github_repo}': {e}", exc_info=True)
-        return {"status": "FAILED", "file_path": file_path_str, "reason": f"Unexpected error: {type(e).__name__} - {e}"}
+        logging.error(f"An unexpected error occurred during publishing '{file_path_str}' for '{full_github_repo}' on branch '{effective_branch}': {e}", exc_info=True)
+        return {"status": "FAILED", "file_path": file_path_str, "reason": f"Unexpected error: {type(e).__name__} - {e}", "branch": effective_branch}
 
 def main():
     parser = argparse.ArgumentParser(description="Generate and optionally publish README drafts and architecture diagrams for GitHub repositories using Gemini.")
@@ -581,7 +576,8 @@ def main():
                         help="Generate READMEs only for repos with 'No README found' in description or readme_available=false/missing.")
     parser.add_argument("--publish", action="store_true", help="Publish the generated README.md directly to GitHub.")
     parser.add_argument("--dry-run", action="store_true", help="Perform a dry run for publishing, showing what would happen without making changes.")
-    parser.add_argument("--branch", type=str, default="main", help="GitHub branch to publish to (default: main).")
+    parser.add_argument("--branch", type=str, default=None, 
+                        help="GitHub branch to publish to. If omitted, the repository's default branch will be used.")
     parser.add_argument("--yes", action="store_true", help="Confirm bulk publish without prompt (required for --all --publish).")
     parser.add_argument("--diagram-mode", type=str, choices=["ai", "none"], default="ai", 
                         help="Mode for generating architecture diagrams (default: ai). 'none' skips diagram generation.")
