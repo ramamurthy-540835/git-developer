@@ -20,27 +20,29 @@ export default function EditorPage() {
       setError(null); // Clear previous errors
       setSourceContext(null); // Clear previous source context
 
-      // This is a simplification; ideally, the app's full object is passed from /demos or fetched via /api/apps/{name}.
-      // For now, construct a plausible mock URL and description based on appName.
-      // NOTE: This URL construction is a *mock* and assumes a predictable Cloud Run URL pattern.
-      // In a real scenario, you'd fetch the full app details from /api/apps/[name] first or pass it from /demos.
-      const appData = {
-        name: appName,
-        url: `https://${appName.toLowerCase().replace(/_/g, '-')}-1035117862188.us-central1.run.app`,
-        description: `A demo application for ${appName.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase())}.`,
-        // Add tags here if needed in the future
-      };
-
-      // Frontend Next.js API route is `/api/transcript`, but the actual backend Flask API is `http://localhost:5000/api/transcript`
-      // When deployed, Next.js could proxy this, or the Flask app could be on the same domain.
-      // For local development, we're calling the Flask backend directly.
-      const response = await fetch('http://10.100.15.44:8000/api/transcript', { // Use explicit IP for FastAPI backend
+      // First, fetch the specific app's details from the backend
+      const appDetailsResponse = await fetch(`http://10.100.15.44:8000/api/apps/${appName}`);
+      if (!appDetailsResponse.ok) {
+        const errorData = await appDetailsResponse.json();
+        throw new Error(errorData.detail || `Failed to fetch app details! status: ${appDetailsResponse.status}`);
+      }
+      const appData = await appDetailsResponse.json();
+      
+      // Then, use the fetched appData to request the transcript
+      const transcriptResponse = await fetch('http://10.100.15.44:8000/api/transcript', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ app: appData }),
       });
+
+      if (!transcriptResponse.ok) {
+        const errorData = await transcriptResponse.json();
+        throw new Error(errorData.detail || `HTTP error! status: ${transcriptResponse.status}`);
+      }
+
+      const data = await transcriptResponse.json();
 
       if (!response.ok) {
         const errorData = await response.json();

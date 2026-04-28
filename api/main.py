@@ -59,17 +59,42 @@ async def health_check():
     return {"status": "ok"}
 
 @app.get("/api/apps")
-async def get_apps():
+async def get_all_apps():
+    """
+    Reads config/apps.yaml and returns the list of all configured applications.
+    """
     try:
         with open("config/apps.yaml", "r") as f:
             apps_config = yaml.safe_load(f)
         return apps_config.get("apps", [])
     except FileNotFoundError:
         logging.error("config/apps.yaml not found", exc_info=True)
-        raise HTTPException(status_code=404, detail="config/apps.yaml not found")
+        raise HTTPException(status_code=404, detail="Application configuration file not found.")
     except yaml.YAMLError as e:
         logging.error(f"Error parsing config/apps.yaml: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error parsing config/apps.yaml: {e}")
+        raise HTTPException(status_code=500, detail=f"Error parsing application configuration: {e}")
+
+@app.get("/api/apps/{app_name}")
+async def get_app_by_name(app_name: str):
+    """
+    Reads config/apps.yaml and returns details for a specific application by name.
+    """
+    try:
+        with open("config/apps.yaml", "r") as f:
+            apps_config = yaml.safe_load(f)
+        apps = apps_config.get("apps", [])
+        
+        for app_data in apps:
+            if app_data.get("name") == app_name:
+                return app_data
+        
+        raise HTTPException(status_code=404, detail=f"Application '{app_name}' not found.")
+    except FileNotFoundError:
+        logging.error("config/apps.yaml not found", exc_info=True)
+        raise HTTPException(status_code=404, detail="Application configuration file not found.")
+    except yaml.YAMLError as e:
+        logging.error(f"Error parsing config/apps.yaml: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error parsing application configuration: {e}")
 
 @app.post("/api/transcript")
 async def post_transcript(request_body: TranscriptRequest):
