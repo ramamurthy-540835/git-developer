@@ -132,12 +132,12 @@ def generate_diagram_plan(repo_metadata: Dict[str, Any], github_repo_context: Op
         f"  \"project_topic\": \"<A concise topic/summary of the project>\",",
         f"  \"architecture_style\": \"<frontend_backend_ai|data_pipeline|agent_workflow|dashboard_analytics|generic>\",",
         f"  \"nodes\": [",
-        f"    {{\"id\": \"<NodeID>\", \"label\": \"<Node Label>\"}}",
+        f"    {{\"id\": \"<NodeID>\", \"label\": \"<Descriptive Node Label (can use \\n for multiline)>\", \"layer\": \"<UI Layer|API Layer|Processing Layer|AI Layer|Data/Storage Layer>\"}}",
         f"    // ... 4 to 8 nodes total",
         f"  ],",
         f"  \"edges\": [",
-        f"    {{\"from\": \"<SourceNodeID>\", \"to\": \"<TargetNodeID>\", \"label\": \"<Edge Label>\"}}",
-        f"    // ... connections between nodes",
+        f"    {{\"from\": \"<SourceNodeID>\", \"to\": \"<TargetNodeID>\"}}",
+        f"    // ... connections between nodes (no labels on edges)",
         f"  ],",
         f"  \"summary_bullets\": [",
         f"    \"<Bullet point summarizing an aspect of the architecture>\"",
@@ -146,10 +146,10 @@ def generate_diagram_plan(repo_metadata: Dict[str, Any], github_repo_context: Op
         f"}}",
         f"\nRules:",
         f"- The 'nodes' array must contain between 4 and 8 elements.",
-        f"- Node 'label' values must be short, clean, complete, and not truncated.",
+        f"- Node 'label' values must be descriptive, complete, and incorporate the actions/data flow that would typically be on an edge. Use '\\n' for multiline text if needed for clarity.",
         f"- Node 'id' values must be unique single uppercase letters (e.g., \"A\", \"B\").",
-        f"- Edge 'from' and 'to' IDs must refer to existing node IDs.",
-        f"- Edge 'label' values must be concise descriptions of the interaction.",
+        f"- Each node MUST have a 'layer' attribute, which must be one of: \"UI Layer\", \"API Layer\", \"Processing Layer\", \"AI Layer\", \"Data/Storage Layer\".",
+        f"- Edge 'from' and 'to' IDs must refer to existing node IDs. Edge labels are NOT used.",
         f"- The diagram plan must accurately reflect the actual repo topic and core functionality.",
         f"- Use specific project terms when known (e.g., 'WeatherNext Dashboard', 'LinkedIn Generator', 'VBC Platform', 'Prompt Craft Engine', 'Agent Orchestrator').",
         f"- Do NOT include any raw Mermaid syntax in the JSON or any markdown formatting.",
@@ -232,9 +232,10 @@ def validate_diagram_plan(plan: Dict[str, Any]) -> bool:
         return False
     
     node_ids = set()
+    allowed_layers = {"UI Layer", "API Layer", "Processing Layer", "AI Layer", "Data/Storage Layer"}
     for node in nodes:
-        if not isinstance(node, dict) or "id" not in node or "label" not in node:
-            logging.error(f"Malformed node entry: {node}")
+        if not isinstance(node, dict) or "id" not in node or "label" not in node or "layer" not in node:
+            logging.error(f"Malformed node entry (missing id, label, or layer): {node}")
             return False
         if not re.fullmatch(r"[A-Z]", node["id"]):
             logging.error(f"Invalid node ID format: {node['id']}. Expected single uppercase letter.")
@@ -245,19 +246,20 @@ def validate_diagram_plan(plan: Dict[str, Any]) -> bool:
         if node["id"] in node_ids:
             logging.error(f"Duplicate node ID: {node['id']}")
             return False
+        if node["layer"] not in allowed_layers:
+            logging.error(f"Invalid node layer: {node['layer']}. Expected one of {allowed_layers}.")
+            return False
         node_ids.add(node["id"])
 
     # Validate edges
     edges = plan.get("edges", [])
     for edge in edges:
-        if not isinstance(edge, dict) or "from" not in edge or "to" not in edge or "label" not in edge:
-            logging.error(f"Malformed edge entry: {edge}")
+        # Edge labels are no longer expected
+        if not isinstance(edge, dict) or "from" not in edge or "to" not in edge:
+            logging.error(f"Malformed edge entry (missing from or to): {edge}")
             return False
         if edge["from"] not in node_ids or edge["to"] not in node_ids:
             logging.error(f"Edge references non-existent node ID: {edge}")
-            return False
-        if not isinstance(edge["label"], str) or not edge["label"].strip():
-            logging.error(f"Edge label is empty or not a string: {edge['label']}.")
             return False
 
     # Validate summary bullets
@@ -274,23 +276,48 @@ def validate_diagram_plan(plan: Dict[str, Any]) -> bool:
 
 def diagram_plan_to_mermaid(plan: Dict[str, Any]) -> str:
     """
-    Converts a validated diagram plan into a Mermaid flowchart TD string.
-    Quotes all labels (node and edge) and strips unsafe characters.
+    Converts a validated diagram plan into a Mermaid flowchart LR string with subgraphs.
+    Quotes all node labels. Edges do not have labels.
     """
-    diagram_lines = ["flowchart TD"]
+    diagram_lines = ["%%{init: {'flowchart': {'nodeSpacing': 50, 'rankSpacing': 70}}}%%", "flowchart LR"]
     
     nodes = plan.get("nodes", [])
     edges = plan.get("edges", [])
 
-    # Define nodes with quoted labels
+    # Group nodes by layer
+    layers = {
+        "UI Layer": [],
+        "API Layer": [],
+        "Processing Layer": [],
+        "AI Layer": [],
+        "Data/Storage Layer": []
+    }
     for node in nodes:
-        sanitized_label = node["label"].replace('"', "'").replace('\n', ' ').strip()
-        diagram_lines.append(f"  {node['id']}[\"{sanitized_label}\"]")
+        if node["layer"] in layers:
+            layers[node["layer"]].append(node)
+        else:
+            # Fallback for unexpected layers, though validation should prevent this
+            logging.warning(f"Node {node['id']} has unrecognized layer '{node['layer']}'. Assigning to 'Generic Layer'.")
+            if "Generic Layer" not in layers:
+                layers["Generic Layer"] = []
+            layers["Generic Layer"].append(node)
 
-    # Define connections with quoted edge labels
+
+    # Define subgraphs and nodes within them
+    for layer_name, layer_nodes in layers.items():
+        if layer_nodes:
+            # Use a simpler subgraph name for Mermaid syntax
+            mermaid_subgraph_name = layer_name.replace(" ", "_").replace("/", "_").replace("-", "_")
+            diagram_lines.append(f"  subgraph {mermaid_subgraph_name} [\"{layer_name}\"]")
+            for node in layer_nodes:
+                # Node labels can contain \n, so don't replace them, only quotes
+                sanitized_label = node["label"].replace('"', "'").strip()
+                diagram_lines.append(f"    {node['id']}[\"{sanitized_label}\"]")
+            diagram_lines.append("  end")
+
+    # Define connections without edge labels
     for edge in edges:
-        sanitized_label = edge["label"].replace('"', "'").replace('\n', ' ').strip()
-        diagram_lines.append(f"  {edge['from']} -->|\"{sanitized_label}\"| {edge['to']}")
+        diagram_lines.append(f"  {edge['from']} --> {edge['to']}")
     
     return "\n".join(diagram_lines)
 
