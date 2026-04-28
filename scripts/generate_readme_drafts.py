@@ -116,102 +116,130 @@ def generate_readme_content(repo_metadata: Dict[str, Any], github_repo_context: 
         logging.error(f"Gemini generation failed for {full_name}: {e}", exc_info=True)
         return ""
 
-MERMAID_PLACEHOLDER_FLOW = """
-## Architecture Flow (Simplified)
-*   User opens the application in a browser/device.
-*   The frontend (UI) makes API requests to the backend.
-*   The backend API processes requests, interacts with data sources (like a database or external services), and generates responses.
-*   API responses are returned to the frontend.
-*   The frontend renders the data and updates the user interface.
-"""
-
-def sanitize_readme_markdown(content: str) -> str:
+def get_architecture_flow_steps_from_llm(repo_metadata: Dict[str, Any], github_repo_context: Optional[Dict[str, Any]] = None) -> List[str]:
     """
-    Removes Mermaid blocks and replaces them with a generic Markdown architecture flow.
+    Asks Gemini to generate a JSON list of architecture flow steps.
     """
-    mermaid_block_pattern = r"```mermaid.*?```"
-    if re.search(mermaid_block_pattern, content, re.DOTALL):
-        logging.info("Detected Mermaid block in generated content. Replacing with simplified Markdown flow.")
-        # Replace all mermaid blocks with the predefined placeholder
-        content = re.sub(mermaid_block_pattern, MERMAID_PLACEHOLDER_FLOW, content, flags=re.DOTALL)
-    return content
+    repo_name = repo_metadata.get("name", "Unnamed Project").replace('-', ' ').replace('_', ' ').title()
+    description = repo_metadata.get("description", "A comprehensive project.")
+    
+    prompt_parts = [
+        f"Generate ONLY a JSON object containing a list of strings, where each string is a concise step in the project's architecture flow. Limit the list to a maximum of 6 steps.",
+        f"The JSON should be in the exact format: {{\"architecture_flow\": [\"step 1\", \"step 2\", ...]}}",
+        f"Project Name: {repo_name}",
+        f"Primary Description: {description}",
+    ]
+    
+    if github_repo_context:
+        prompt_parts.append("\n--- Additional Repository Context (integrate this information for architecture flow) ---")
+        if github_repo_context.get("tech_stack"):
+            prompt_parts.append(f"Detected Technologies from codebase: {', '.join(github_repo_context['tech_stack'])}")
+        if github_repo_context.get("features"):
+            prompt_parts.append(f"Inferred Features/Capabilities from codebase: {', '.join(github_repo_context['features'])}")
+        if github_repo_context.get("files"):
+            prompt_parts.append(f"Top-level files and directories in repository: {', '.join(github_repo_context['files'])}")
+        prompt_parts.append("Deduce the architecture flow steps from this context.")
+    else:
+        prompt_parts.append("\n--- IMPORTANT: No GitHub repository context was available. Generate the architecture flow using only the provided metadata. ---")
 
-def publish_readme_to_github(
-    owner: str, 
-    repo_name: str, 
-    readme_content: str, 
-    github_token: str, 
-    branch: str = "main", 
+    full_prompt = "\n".join(prompt_parts)
+    logging.debug(f"Sending architecture flow prompt to LLM (first 500 chars):\n{full_prompt[:500]}...")
+
+    try:
+        response = model.generate_content(full_prompt)
+        generated_json_str = response.text.strip()
+        logging.debug(f"Raw architecture flow JSON from LLM: {generated_json_str}")
+        # Attempt to parse, sometimes LLMs wrap JSON in markdown code blocks
+        if generated_json_str.startswith("```json") and generated_json_str.endswith("```"):
+            generated_json_str = generated_json_str[len("```json"):-len("```")].strip()
+
+        data = json.loads(generated_json_str)
+        if "architecture_flow" in data and isinstance(data["architecture_flow"], list):
+            return data["architecture_flow"][:6] # Ensure max 6 steps
+        else:
+            logging.warning(f"LLM response for architecture flow did not contain 'architecture_flow' list or was malformed: {generated_json_str}")
+            return []
+    except json.JSONDecodeError as e:
+        logging.error(f"Failed to parse architecture flow JSON from LLM: {e}. Raw response: {generated_json_str}", exc_info=True)
+        return []
+    except Exception as e:
+        logging.error(f"Gemini generation failed for architecture flow: {e}", exc_info=True)
+        return []
+
+def steps_to_mermaid(steps: List[str]) -> str:
+    """
+    Converts a list of architecture steps into a Mermaid flowchart TD string.
+    Quotes all labels and strips unsafe characters. Limits to max 6 steps.
+    """
+    if not steps:
+        return ""
+
+    diagram_lines = ["flowchart TD"]
+    steps = steps[:6] # Ensure max 6 steps
+    
+    node_ids = [chr(ord('A') + i) for i in range(len(steps))]
+
+    for i, step in enumerate(steps):
+        # Sanitize label: replace double quotes with single, remove newlines, trim whitespace.
+        # Ensure it's safe for a Mermaid quoted label.
+        sanitized_step = step.replace('"', "'").replace('\n', ' ').strip()
+        diagram_lines.append(f"  {node_ids[i]}[\"{sanitized_step}\"]")
+
+    for i in range(len(steps) - 1):
+        diagram_lines.append(f"  {node_ids[i]} --> {node_ids[i+1]}")
+    
+    return "\n".join(diagram_lines)
+
+def generate_architecture_html(mermaid_content: str, title: str) -> str:
+    """
+    Generates an HTML file content to preview a Mermaid diagram.
+    """
+    html_template = f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>{title} - Architecture Diagram</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+    <style>
+        body {{ font-family: sans-serif; margin: 20px; }}
+        .mermaid {{ width: 100%; height: auto; }}
+    </style>
+</head>
+<body>
+    <h1>{title} Architecture Diagram</h1>
+    <div class="mermaid">
+{mermaid_content}
+    </div>
+    <script>
+        mermaid.initialize({{ startOnLoad: true }});
+    </script>
+</body>
+</html>"""
+    return html_template
+
+def publish_file_to_github(
+    owner: str,
+    repo_name: str,
+    file_path_in_repo: Path, # e.g., README.md, docs/architecture.mmd
+    file_content: str,
+    github_token: str,
+    branch: str = "main",
     dry_run: bool = False
 ) -> Dict[str, Any]:
     """
-    Publishes the generated README.md content to GitHub using the GitHub REST API.
+    Publishes the given file content to GitHub using the GitHub REST API.
     Updates if it exists, creates if it doesn't.
     """
     full_github_repo = f"{owner}/{repo_name}"
-    url = f"https://api.github.com/repos/{full_github_repo}/contents/README.md"
+    file_path_str = str(file_path_in_repo)
+    url = f"https://api.github.com/repos/{full_github_repo}/contents/{file_path_str}"
     headers = {
         "Authorization": f"token {github_token}",
         "Accept": "application/vnd.github.v3+json"
     }
-    commit_message = "docs: add project README"
-
-    logging.debug(f"Attempting to publish {file_path_str} to {full_github_repo}/{branch} (dry_run={dry_run})")
-
-    if dry_run:
-        logging.info(f"DRY RUN: Would publish/update '{file_path_str}' for '{full_github_repo}' on branch '{branch}'.")
-        return {"status": "DRY_RUN_SUCCESS", "file_path": file_path_str}
-
-    sha = None
-    action_performed = "created" # Default to created
     
-    try:
-        # Check if file exists to get its SHA
-        response = requests.get(url, headers=headers)
-        if response.status_code == 200:
-            file_data = response.json()
-            sha = file_data['sha']
-            logging.debug(f"'{file_path_str}' exists for '{full_github_repo}', SHA: {sha}")
-            commit_message_action = "update"
-            commit_message = f"{commit_message_type}: {commit_message_action} {file_path_str}"
-            action_performed = "updated"
-        elif response.status_code == 404:
-            logging.debug(f"'{file_path_str}' does not exist for '{full_github_repo}'. Will create.")
-            # commit_message already set for 'add' or 'create'
-        else:
-            response.raise_for_status() # Raise for other HTTP errors
-
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Failed to check existing '{file_path_str}' for '{full_github_repo}': {e}")
-        return {"status": "FAILED", "file_path": file_path_str, "reason": f"API check failed: {e}"}
-
-    # Prepare content for PUT request
-    encoded_content = base64.b64encode(file_content.encode('utf-8')).decode('utf-8')
-    payload = {
-        "message": commit_message,
-        "content": encoded_content,
-        "branch": branch
-    }
-    if sha:
-        payload["sha"] = sha
-
-    try:
-        response = requests.put(url, headers=headers, json=payload)
-        response.raise_for_status() # Raise for HTTP errors (4xx or 5xx)
-        
-        logging.info(f"Successfully {action_performed} '{file_path_str}' for '{full_github_repo}' on branch '{branch}'.")
-        return {"status": "SUCCESS", "action": action_performed, "file_path": file_path_str}
-
-    except requests.exceptions.HTTPError as e:
-        error_details = e.response.json().get('message', str(e))
-        logging.error(f"Failed to publish '{file_path_str}' for '{full_github_repo}': HTTPError {e.response.status_code} - {error_details}")
-        return {"status": "FAILED", "file_path": file_path_str, "reason": f"HTTPError {e.response.status_code}: {error_details}"}
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Failed to publish '{file_path_str}' for '{full_github_repo}': {e}")
-        return {"status": "FAILED", "file_path": file_path_str, "reason": f"API PUT failed: {e}"}
-    except Exception as e:
-        logging.error(f"An unexpected error occurred during publishing '{file_path_str}' for '{full_github_repo}': {e}", exc_info=True)
-        return {"status": "FAILED", "file_path": file_path_str, "reason": f"Unexpected error: {type(e).__name__} - {e}"}
+    commit_message_action = "add" if file_path_str == "README.md" else "create"
+    commit_message_type = "docs" if file_path_str.startswith("docs/") or file_path_str == "README.md" else "feat" # Default
+    commit_message = f"{commit_message_type}: {commit_message_action} {file_path_str}"
 
 def main():
     parser = argparse.ArgumentParser(description="Generate and optionally publish README drafts and architecture diagrams for GitHub repositories using Gemini.")
