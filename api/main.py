@@ -3,6 +3,7 @@ import asyncio
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
 import logging
+from flask_asgi_middleware import ASGIMiddleware # Import ASGIMiddleware
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -10,6 +11,9 @@ app = Flask(__name__)
 
 # Load environment variables from .env.local if present
 load_dotenv(dotenv_path='./.env.local')
+
+# Wrap the Flask app with ASGIMiddleware to make it compatible with Uvicorn
+app_asgi = ASGIMiddleware(app)
 
 # Assuming agents.transcript_agent exists and has generate_transcript
 try:
@@ -58,7 +62,7 @@ def get_generated_transcript_sync():
 
 if __name__ == '__main__':
     # When running directly with `python api/main.py`
-    # Ensure FLASK_APP is set for `flask run` if preferred.
-    # E.g., export FLASK_APP=api/main.py
-    # flask run --port 5000
+    # This will run Flask's built-in WSGI development server.
     app.run(debug=True, port=5000)
+    # To run with uvicorn, you would typically use:
+    # uvicorn api.main:app_asgi --host 0.0.0.0 --port 8000 --reload
