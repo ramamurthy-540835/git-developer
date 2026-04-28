@@ -241,6 +241,66 @@ def publish_file_to_github(
     commit_message_type = "docs" if file_path_str.startswith("docs/") or file_path_str == "README.md" else "feat" # Default
     commit_message = f"{commit_message_type}: {commit_message_action} {file_path_str}"
 
+    logging.debug(f"Attempting to publish {file_path_str} to {full_github_repo}/{branch} (dry_run={dry_run})")
+
+    if dry_run:
+        logging.info(f"DRY RUN: Would publish/update '{file_path_str}' for '{full_github_repo}' on branch '{branch}'.")
+        return {"status": "DRY_RUN_SUCCESS", "file_path": file_path_str}
+
+    sha = None
+    action_performed = "created" # Default to created
+    
+    try:
+        # Check if file exists to get its SHA
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            file_data = response.json()
+            sha = file_data['sha']
+            logging.debug(f"'{file_path_str}' exists for '{full_github_repo}', SHA: {sha}")
+            commit_message_action = "update"
+            commit_message = f"{commit_message_type}: {commit_message_action} {file_path_str}"
+            action_performed = "updated"
+        elif response.status_code == 404:
+            logging.debug(f"'{file_path_str}' does not exist for '{full_github_repo}'. Will create.")
+            # commit_message already set for 'add' or 'create'
+        else:
+            response.raise_for_status() # Raise for other HTTP errors
+
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Failed to check existing '{file_path_str}' for '{full_github_repo}': {e}")
+        return {"status": "FAILED", "file_path": file_path_str, "reason": f"API check failed: {e}"}
+    except Exception as e: # Catch any other unexpected errors during the GET request
+        logging.error(f"An unexpected error occurred during check for existing '{file_path_str}' for '{full_github_repo}': {e}", exc_info=True)
+        return {"status": "FAILED", "file_path": file_path_str, "reason": f"Unexpected error during GET check: {type(e).__name__} - {e}"}
+
+    # Prepare content for PUT request
+    encoded_content = base64.b64encode(file_content.encode('utf-8')).decode('utf-8')
+    payload = {
+        "message": commit_message,
+        "content": encoded_content,
+        "branch": branch
+    }
+    if sha:
+        payload["sha"] = sha
+
+    try:
+        response = requests.put(url, headers=headers, json=payload)
+        response.raise_for_status() # Raise for HTTP errors (4xx or 5xx)
+        
+        logging.info(f"Successfully {action_performed} '{file_path_str}' for '{full_github_repo}' on branch '{branch}'.")
+        return {"status": "SUCCESS", "action": action_performed, "file_path": file_path_str}
+
+    except requests.exceptions.HTTPError as e:
+        error_details = e.response.json().get('message', str(e))
+        logging.error(f"Failed to publish '{file_path_str}' for '{full_github_repo}': HTTPError {e.response.status_code} - {error_details}")
+        return {"status": "FAILED", "file_path": file_path_str, "reason": f"HTTPError {e.response.status_code}: {error_details}"}
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Failed to publish '{file_path_str}' for '{full_github_repo}': {e}")
+        return {"status": "FAILED", "file_path": file_path_str, "reason": f"API PUT failed: {e}"}
+    except Exception as e:
+        logging.error(f"An unexpected error occurred during publishing '{file_path_str}' for '{full_github_repo}': {e}", exc_info=True)
+        return {"status": "FAILED", "file_path": file_path_str, "reason": f"Unexpected error: {type(e).__name__} - {e}"}
+
 def main():
     parser = argparse.ArgumentParser(description="Generate and optionally publish README drafts and architecture diagrams for GitHub repositories using Gemini.")
     parser.add_argument("--repo", type=str, help="Generate/publish for a specific repo by its full name (e.g., owner/repo).")
