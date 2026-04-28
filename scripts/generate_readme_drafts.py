@@ -116,139 +116,204 @@ def generate_readme_content(repo_metadata: Dict[str, Any], github_repo_context: 
         logging.error(f"Gemini generation failed for {full_name}: {e}", exc_info=True)
         return ""
 
-def detect_repo_archetype(repo_metadata: Dict[str, Any], github_repo_context: Optional[Dict[str, Any]]) -> str:
+def generate_diagram_plan(repo_metadata: Dict[str, Any], github_repo_context: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     """
-    Detects the repository archetype based on metadata and GitHub context.
+    Asks Gemini to generate a structured JSON plan for an architecture diagram.
+    Includes retry logic for JSON parsing failures.
     """
-    repo_name = repo_metadata.get("name", "").lower()
-    description = repo_metadata.get("description", "").lower()
-    language = repo_metadata.get("language", "").lower()
-    tech_stack = [t.lower() for t in github_repo_context.get("tech_stack", [])] if github_repo_context else []
-    features = [f.lower() for f in github_repo_context.get("features", [])] if github_repo_context else []
-    files = [f.lower() for f in github_repo_context.get("files", [])] if github_repo_context else []
+    repo_name = repo_metadata.get("name", "Unnamed Project").replace('-', ' ').replace('_', ' ').title()
+    description = repo_metadata.get("description", "A comprehensive project.")
+    language = repo_metadata.get("language", "Not specified")
 
-    # Prioritize specific platforms/apps
-    if "weather" in repo_name or "weather" in description or "weather" in features:
-        return "weather_platform"
-    if "healthcare" in repo_name or "healthcare" in description or "care" in features:
-        return "healthcare_platform"
-    if "agent" in repo_name or "agent" in description or "llm" in tech_stack or "gemini" in tech_stack or "ai" in features:
-        return "agent_platform"
-    if "data" in repo_name or "data" in description or "data" in tech_stack or "analytics" in features:
-        return "data_platform"
+    prompt_parts = [
+        f"Analyze the following repository information and generate ONLY a JSON object representing an architecture diagram plan.",
+        f"The JSON object must have the following structure and adhere to the rules below:",
+        f"{{",
+        f"  \"project_topic\": \"<A concise topic/summary of the project>\",",
+        f"  \"architecture_style\": \"<frontend_backend_ai|data_pipeline|agent_workflow|dashboard_analytics|generic>\",",
+        f"  \"nodes\": [",
+        f"    {{\"id\": \"<NodeID>\", \"label\": \"<Node Label>\"}}",
+        f"    // ... 4 to 8 nodes total",
+        f"  ],",
+        f"  \"edges\": [",
+        f"    {{\"from\": \"<SourceNodeID>\", \"to\": \"<TargetNodeID>\", \"label\": \"<Edge Label>\"}}",
+        f"    // ... connections between nodes",
+        f"  ],",
+        f"  \"summary_bullets\": [",
+        f"    \"<Bullet point summarizing an aspect of the architecture>\"",
+        f"    // ... 2 to 4 summary bullets",
+        f"  ]",
+        f"}}",
+        f"\nRules:",
+        f"- The 'nodes' array must contain between 4 and 8 elements.",
+        f"- Node 'label' values must be short, clean, complete, and not truncated.",
+        f"- Node 'id' values must be unique single uppercase letters (e.g., \"A\", \"B\").",
+        f"- Edge 'from' and 'to' IDs must refer to existing node IDs.",
+        f"- Edge 'label' values must be concise descriptions of the interaction.",
+        f"- The diagram plan must accurately reflect the actual repo topic and core functionality.",
+        f"- Use specific project terms when known (e.g., 'WeatherNext Dashboard', 'LinkedIn Generator', 'VBC Platform', 'Prompt Craft Engine', 'Agent Orchestrator').",
+        f"- Do NOT include any raw Mermaid syntax in the JSON or any markdown formatting.",
+        f"- Do NOT include any introductory or concluding remarks, just the JSON object.",
+        f"\nProject Name: {repo_name}",
+        f"Primary Description: {description}",
+        f"Main Language: {language}",
+    ]
 
-    # Then general types
-    if "nextjs" in tech_stack or language == "typescript" or "frontend" in files or "app/page.js" in files:
-        return "nextjs_app"
-    if language == "python" or "flask" in tech_stack or "django" in tech_stack or "backend" in files:
-        return "python_backend"
+    if github_repo_context:
+        prompt_parts.append("\n--- Additional Repository Context (integrate this information) ---")
+        if github_repo_context.get("readme") and github_repo_context["readme"] != "No README.md found.":
+            # Provide first 500 chars of README to avoid excessively long prompts
+            prompt_parts.append(f"First part of existing README content: {github_repo_context['readme'][:500]}...")
+        if github_repo_context.get("tech_stack"):
+            prompt_parts.append(f"Detected Technologies: {', '.join(github_repo_context['tech_stack'])}")
+        if github_repo_context.get("features"):
+            prompt_parts.append(f"Inferred Features: {', '.join(github_repo_context['features'])}")
+        if github_repo_context.get("files"):
+            prompt_parts.append(f"Top-level files and directories: {', '.join(github_repo_context['files'])}")
+        prompt_parts.append("Use this context to inform the nodes, edges, and overall architecture style.")
+    else:
+        prompt_parts.append("\n--- IMPORTANT: No GitHub repository context was available. Generate the diagram plan using only the provided metadata. ---")
+
+    full_prompt = "\n".join(prompt_parts)
+    logging.debug(f"Sending diagram plan prompt to LLM (first 1000 chars):\n{full_prompt[:1000]}...")
+
+    plan_data = None
+    retries = 2 # Initial attempt + 1 retry
+    for i in range(retries + 1):
+        try:
+            response = model.generate_content(full_prompt)
+            generated_json_str = response.text.strip()
+            logging.debug(f"Raw diagram plan JSON from LLM (attempt {i+1}): {generated_json_str}")
+
+            # Clean markdown code block if present
+            if generated_json_str.startswith("```json") and generated_json_str.endswith("```"):
+                generated_json_str = generated_json_str[len("```json"):-len("```")].strip()
+            
+            plan_data = json.loads(generated_json_str)
+            logging.debug(f"Parsed diagram plan: {plan_data}")
+            break # Successfully parsed
+        except json.JSONDecodeError as e:
+            logging.warning(f"Failed to parse diagram plan JSON from LLM (attempt {i+1}): {e}. Raw response: {generated_json_str}", exc_info=True)
+            if i < retries:
+                logging.info("Retrying diagram plan generation with stricter prompt...")
+                # For retry, append a reminder about strict JSON
+                full_prompt += "\n\nCRITICAL: The previous response was not valid JSON. You MUST return only a valid JSON object as specified, with no extra text or markdown wrappers."
+                time.sleep(2) # Wait a bit before retrying
+            else:
+                logging.error(f"Failed to parse diagram plan JSON after {retries + 1} attempts. Giving up.")
+                return None
+        except Exception as e:
+            logging.error(f"Gemini generation failed for diagram plan (attempt {i+1}): {e}", exc_info=True)
+            return None # Other errors are generally non-recoverable by retry here
+
+    if plan_data and validate_diagram_plan(plan_data):
+        return plan_data
+    else:
+        logging.error("Generated diagram plan failed validation.")
+        return None
+
+def validate_diagram_plan(plan: Dict[str, Any]) -> bool:
+    """
+    Validates the structure and content of the AI-generated diagram plan.
+    """
+    if not isinstance(plan, dict):
+        logging.error("Diagram plan is not a dictionary.")
+        return False
     
-    return "generic_app"
+    required_keys = ["project_topic", "architecture_style", "nodes", "edges", "summary_bullets"]
+    if not all(key in plan for key in required_keys):
+        logging.error(f"Diagram plan missing required keys. Found: {plan.keys()}, Expected: {required_keys}")
+        return False
 
+    # Validate nodes
+    nodes = plan.get("nodes", [])
+    if not (4 <= len(nodes) <= 8):
+        logging.error(f"Invalid number of nodes: {len(nodes)}. Expected 4-8.")
+        return False
+    
+    node_ids = set()
+    for node in nodes:
+        if not isinstance(node, dict) or "id" not in node or "label" not in node:
+            logging.error(f"Malformed node entry: {node}")
+            return False
+        if not re.fullmatch(r"[A-Z]", node["id"]):
+            logging.error(f"Invalid node ID format: {node['id']}. Expected single uppercase letter.")
+            return False
+        if not isinstance(node["label"], str) or not node["label"].strip():
+            logging.error(f"Node label is empty or not a string: {node['label']}.")
+            return False
+        if node["id"] in node_ids:
+            logging.error(f"Duplicate node ID: {node['id']}")
+            return False
+        node_ids.add(node["id"])
 
-def build_architecture_steps(archetype: str, repo_metadata: Dict[str, Any], github_repo_context: Optional[Dict[str, Any]], tech_stack: List[str]) -> List[str]:
+    # Validate edges
+    edges = plan.get("edges", [])
+    for edge in edges:
+        if not isinstance(edge, dict) or "from" not in edge or "to" not in edge or "label" not in edge:
+            logging.error(f"Malformed edge entry: {edge}")
+            return False
+        if edge["from"] not in node_ids or edge["to"] not in node_ids:
+            logging.error(f"Edge references non-existent node ID: {edge}")
+            return False
+        if not isinstance(edge["label"], str) or not edge["label"].strip():
+            logging.error(f"Edge label is empty or not a string: {edge['label']}.")
+            return False
+
+    # Validate summary bullets
+    summary_bullets = plan.get("summary_bullets", [])
+    if not (2 <= len(summary_bullets) <= 4):
+        logging.error(f"Invalid number of summary bullets: {len(summary_bullets)}. Expected 2-4.")
+        return False
+    for bullet in summary_bullets:
+        if not isinstance(bullet, str) or not bullet.strip():
+            logging.error(f"Summary bullet is empty or not a string: {bullet}.")
+            return False
+            
+    return True
+
+def diagram_plan_to_mermaid(plan: Dict[str, Any]) -> str:
     """
-    Builds a list of 5 to 7 architecture steps based on the detected archetype.
+    Converts a validated diagram plan into a Mermaid flowchart TD string.
+    Quotes all labels (node and edge) and strips unsafe characters.
     """
-    repo_name_title = repo_metadata.get("name", "Application").replace('-', ' ').replace('_', ' ').title()
-    description = repo_metadata.get("description", "").lower()
-
-    base_steps = []
-
-    if archetype == "nextjs_app":
-        base_steps = [
-            f"User opens the {repo_name_title} web application",
-            "Next.js frontend renders pages and components",
-            "API routes handle application requests",
-            "Backend services process business logic",
-            "External APIs or data stores provide data",
-            "UI displays generated insights and actions"
-        ]
-    elif archetype == "python_backend":
-        base_steps = [
-            "Client sends API request",
-            f"Load balancer/API Gateway routes request to {repo_name_title} backend",
-            "Python backend processes request with business logic",
-            "Database or external services are queried",
-            "Backend generates and returns API response"
-        ]
-    elif archetype == "agent_platform":
-        base_steps = [
-            "User submits task or prompt",
-            f"Frontend sends request to {repo_name_title} orchestration API",
-            "Agent orchestrator plans the workflow",
-            "Specialized agents execute tools and business logic",
-            "LLM service generates structured output",
-            "Results are stored, reviewed, and displayed to the user"
-        ]
-    elif archetype == "data_platform":
-        base_steps = [
-            "Data sources ingest raw data",
-            f"Data processing pipelines transform data for {repo_name_title}",
-            "Data is stored in warehouses/lakes",
-            "Analytics layer queries and processes data",
-            "Reporting/Visualization tools display insights",
-            "Users consume insights for decision making"
-        ]
-    elif archetype == "healthcare_platform":
-        base_steps = [
-            f"Care team opens {repo_name_title} dashboard",
-            "Frontend shows patient cohorts and workflow views",
-            "Backend APIs load clinical and operational data",
-            "Analytics layer calculates risk, care gaps, and quality measures",
-            "AI agents generate recommendations and next actions",
-            "Users review insights and trigger care management workflows"
-        ]
-    elif archetype == "weather_platform":
-        base_steps = [
-            f"User opens {repo_name_title} dashboard",
-            "Next.js frontend renders forecast views and maps",
-            "API routes request weather and climate data",
-            "Forecast engine processes city and model inputs",
-            "AI insight layer generates alerts and decision briefs",
-            "Dashboard displays forecasts, risks, and export options"
-        ]
-    else: # generic_app
-        base_steps = [
-            "User interacts with the application interface",
-            "Frontend sends requests to the backend",
-            "Backend processes requests and applies business logic",
-            "Data is retrieved from or stored in the database",
-            "External services or APIs are integrated (if applicable)",
-            "Results are returned and displayed to the user"
-        ]
-
-    # Dynamically add an extra step if there's a strong AI/ML presence and < 7 steps
-    if len(base_steps) < 7 and ("ai" in description or "machine learning" in description or "gemini" in tech_stack or "llm" in tech_stack):
-        base_steps.insert(len(base_steps) - 1, "AI/ML models process data and generate insights")
-        
-    return base_steps[:7] # Ensure max 7 steps
-
-def steps_to_mermaid(steps: List[str]) -> str:
-    """
-    Converts a list of architecture steps (5-7) into a Mermaid flowchart TD string.
-    Quotes all labels and strips unsafe characters.
-    """
-    if not steps or not (5 <= len(steps) <= 7):
-        logging.warning(f"Invalid number of steps for Mermaid diagram: {len(steps)}. Expected 5-7.")
-        return ""
-
     diagram_lines = ["flowchart TD"]
     
-    # Generate node IDs (A, B, C, ...)
-    node_ids = [chr(ord('A') + i) for i in range(len(steps))]
+    nodes = plan.get("nodes", [])
+    edges = plan.get("edges", [])
 
     # Define nodes with quoted labels
-    for i, step in enumerate(steps):
-        # Sanitize label: replace double quotes with single, remove newlines, trim whitespace.
-        sanitized_step = step.replace('"', "'").replace('\n', ' ').strip()
-        diagram_lines.append(f"  {node_ids[i]}[\"{sanitized_step}\"]")
+    for node in nodes:
+        sanitized_label = node["label"].replace('"', "'").replace('\n', ' ').strip()
+        diagram_lines.append(f"  {node['id']}[\"{sanitized_label}\"]")
 
-    # Define connections
-    for i in range(len(steps) - 1):
-        diagram_lines.append(f"  {node_ids[i]} --> {node_ids[i+1]}")
+    # Define connections with quoted edge labels
+    for edge in edges:
+        sanitized_label = edge["label"].replace('"', "'").replace('\n', ' ').strip()
+        diagram_lines.append(f"  {edge['from']} -->|\"{sanitized_label}\"| {edge['to']}")
     
     return "\n".join(diagram_lines)
+
+def insert_ai_diagram_into_architecture_section(base_readme_content: str, diagram_plan: Dict[str, Any], mermaid_diagram: str) -> str:
+    """
+    Inserts the AI-generated diagram and summary into the Architecture section of the README.
+    """
+    architecture_section_markdown = "\n## Architecture\n\n"
+    
+    project_topic = diagram_plan.get("project_topic", "The project's architecture")
+    architecture_section_markdown += f"{project_topic}.\n\n"
+
+    architecture_section_markdown += "```mermaid\n"
+    architecture_section_markdown += mermaid_diagram
+    architecture_section_markdown += "\n```\n"
+    architecture_section_markdown += f"\nFor a standalone preview, see [docs/architecture.html](docs/architecture.html).\n"
+
+    architecture_section_markdown += "\n### Key Architectural Aspects:\n"
+    for bullet in diagram_plan.get("summary_bullets", []):
+        architecture_section_markdown += f"* {bullet}\n"
+    
+    # We defined the prompt *not* to include "## Architecture", so we just append it.
+    return base_readme_content + architecture_section_markdown
 
 def generate_architecture_html(mermaid_content: str, title: str) -> str:
     """
@@ -373,10 +438,15 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Perform a dry run for publishing, showing what would happen without making changes.")
     parser.add_argument("--branch", type=str, default="main", help="GitHub branch to publish to (default: main).")
     parser.add_argument("--yes", action="store_true", help="Confirm bulk publish without prompt (required for --all --publish).")
+    parser.add_argument("--diagram-mode", type=str, choices=["ai", "none"], default="ai", 
+                        help="Mode for generating architecture diagrams (default: ai). 'none' skips diagram generation.")
     args = parser.parse_args()
 
     if not args.repo and not args.all:
         parser.error("Please specify either --repo <full_name> or --all.")
+
+    if args.diagram_mode == "none":
+        logging.info("Diagram generation is disabled by --diagram-mode none.")
 
     repos_config_path = Path("config/repos.yaml")
     if not repos_config_path.exists():
@@ -553,39 +623,31 @@ def main():
                 report["summary"]["failed_count"] += 1
                 continue # Cannot proceed without README content
 
-            # --- Determine Architecture and Generate Diagram components ---
-            archetype = detect_repo_archetype(repo_metadata, github_repo_context)
-            logging.info(f"Detected archetype for '{full_name}': {archetype}")
-            
-            # Extract tech_stack from context for build_architecture_steps
-            tech_stack_for_arch = [t.lower() for t in github_repo_context.get("tech_stack", [])] if github_repo_context else []
-            architecture_steps = build_architecture_steps(archetype, repo_metadata, github_repo_context, tech_stack_for_arch)
+            # --- Generate Architecture Diagram components based on diagram_mode ---
+            diagram_plan = None
+            if args.diagram_mode == "ai":
+                logging.info(f"Generating AI-driven diagram plan for '{full_name}'...")
+                diagram_plan = generate_diagram_plan(repo_metadata, github_repo_context)
 
-            if architecture_steps:
-                mermaid_content = steps_to_mermaid(architecture_steps)
+            if diagram_plan:
+                mermaid_content = diagram_plan_to_mermaid(diagram_plan)
                 if mermaid_content:
                     html_content = generate_architecture_html(mermaid_content, repo_name)
-                    logging.info(f"Generated architecture diagram for '{full_name}'.")
+                    readme_content = insert_ai_diagram_into_architecture_section(readme_content, diagram_plan, mermaid_content)
+                    logging.info(f"Generated AI-driven architecture diagram for '{full_name}'.")
                 else:
-                    logging.warning(f"Mermaid content generation failed for '{full_name}' with {len(architecture_steps)} steps. Falling back to bullet list.")
-                    architecture_flow_bullet_list = "\n" + "\n".join([f"* {step}" for step in architecture_steps]) + "\n"
+                    logging.warning(f"Mermaid content generation failed from AI diagram plan for '{full_name}'. Falling back to bullet list.")
+                    # Fallback to simple bullet list from plan summary if Mermaid generation fails
+                    architecture_section_markdown = "\n## Architecture\n\n"
+                    architecture_section_markdown += diagram_plan.get("project_topic", "The project's architecture") + ".\n\n"
+                    architecture_section_markdown += "\n### Key Architectural Aspects:\n"
+                    for bullet in diagram_plan.get("summary_bullets", []):
+                        architecture_section_markdown += f"* {bullet}\n"
+                    readme_content += architecture_section_markdown
             else:
-                logging.warning(f"Failed to build architecture flow steps for '{full_name}'. Falling back to simple placeholder.")
-                architecture_flow_bullet_list = "\n* Architecture flow steps could not be generated. Please review the project manually.\n"
-            
-            # --- Insert Architecture section into README content ---
-            architecture_section_markdown = "\n## Architecture\n\n"
-            if mermaid_content:
-                architecture_section_markdown += "```mermaid\n"
-                architecture_section_markdown += mermaid_content
-                architecture_section_markdown += "\n```\n"
-                architecture_section_markdown += f"\nFor a standalone preview, see [docs/architecture.html](docs/architecture.html).\n"
-            else:
-                architecture_section_markdown += architecture_flow_bullet_list
-
-            # Find a suitable place to insert, e.g., before 'Tech Stack' or at the end
-            # We defined the prompt *not* to include "## Architecture", so we just append it.
-            readme_content += architecture_section_markdown
+                logging.warning(f"Skipping AI diagram generation or plan validation failed for '{full_name}'. Adding a simple placeholder.")
+                architecture_section_markdown = "\n## Architecture\n\n* Architecture diagram could not be generated automatically. Please review the project manually.\n"
+                readme_content += architecture_section_markdown
             
             generated_new_readme_locally = True # Mark as newly generated
 
