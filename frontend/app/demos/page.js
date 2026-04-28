@@ -11,7 +11,7 @@ export default function DemosPage() {
   useEffect(() => {
     async function fetchApps() {
       try {
-        const response = await fetch('http://localhost:8000/api/apps');
+        const response = await fetch('http://10.100.15.44:8000/api/apps');
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }

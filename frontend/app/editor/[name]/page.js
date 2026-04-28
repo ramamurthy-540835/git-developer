@@ -34,7 +34,7 @@ export default function EditorPage() {
       // Frontend Next.js API route is `/api/transcript`, but the actual backend Flask API is `http://localhost:5000/api/transcript`
       // When deployed, Next.js could proxy this, or the Flask app could be on the same domain.
       // For local development, we're calling the Flask backend directly.
-      const response = await fetch('http://localhost:8000/api/transcript', { // Use explicit localhost for FastAPI backend
+      const response = await fetch('http://10.100.15.44:8000/api/transcript', { // Use explicit IP for FastAPI backend
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -72,7 +72,7 @@ export default function EditorPage() {
     alert('Generating MP3...'); // User feedback
     try {
       // Assuming 'transcript' state holds the current editable content
-      const response = await fetch('http://localhost:8000/api/generate-mp3', {
+      const response = await fetch('http://10.100.15.44:8000/api/generate-mp3', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
