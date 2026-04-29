@@ -40,7 +40,7 @@ export default function EditorPage() {
     failed: 'Failed',
   };
 
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://10.100.15.44:8000";
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
   
   console.log("API_BASE_URL (Editor Page):", API_BASE_URL);
 
