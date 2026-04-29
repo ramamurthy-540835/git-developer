@@ -29,6 +29,7 @@ export default function EditorPage() {
   const [videoPrompt, setVideoPrompt] = useState('');
   const [durationSeconds, setDurationSeconds] = useState(32);
   const [autoPromptMode, setAutoPromptMode] = useState(true);
+  const [uploadToSharePoint, setUploadToSharePoint] = useState(true); // New state for SharePoint upload checkbox
   const statusText = {
     queued: 'Queued',
     generating_mp3: 'Generating audio',
@@ -237,6 +238,7 @@ export default function EditorPage() {
           renderer_mode: rendererMode,
           video_prompt: videoPrompt,
           duration_seconds: durationSeconds,
+          upload_to_sharepoint: uploadToSharePoint, // Include the new flag
         }),
       });
       if (!response.ok) {
@@ -436,6 +438,10 @@ export default function EditorPage() {
             <input type="checkbox" checked={autoPromptMode} onChange={(e) => setAutoPromptMode(e.target.checked)} />
             <span>Auto prompt</span>
           </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={uploadToSharePoint} onChange={(e) => setUploadToSharePoint(e.target.checked)} />
+            <span>Upload to SharePoint</span>
+          </label>
         </div>
         <p className="text-sm text-gray-600 mb-2">Estimated Cost: ${rendererMode === 'veo_lite' ? (durationSeconds * 0.05).toFixed(2) : '0.00'}</p>
         {rendererMode === 'veo_lite' && (
@@ -477,6 +483,22 @@ export default function EditorPage() {
               <p><strong>Video:</strong> {videoJob.result.video_file_name}</p>
               <p><strong>Video Local:</strong> {videoJob.result.video_local_path}</p>
               <p><strong>Video GCS:</strong> {videoJob.result.video_gcs_path}</p>
+              {videoJob.result.sharepoint_status && (
+                <div className="mt-2 pt-2 border-t border-gray-200">
+                  <p><strong>SharePoint Status:</strong> {videoJob.result.sharepoint_status}</p>
+                  {videoJob.result.sharepoint_url && (
+                    <p>
+                      <strong className="font-semibold">SharePoint Link:</strong>{' '}
+                      <a href={videoJob.result.sharepoint_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                        Open in SharePoint
+                      </a>
+                    </p>
+                  )}
+                  {videoJob.result.sharepoint_error && (
+                    <p className="text-red-600"><strong>SharePoint Error:</strong> {videoJob.result.sharepoint_error}</p>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

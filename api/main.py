@@ -79,6 +79,7 @@ class VideoGenerateRequest(BaseModel):
     renderer_mode: Optional[str] = "local_ffmpeg"
     video_prompt: Optional[str] = None
     duration_seconds: Optional[int] = 32
+    upload_to_sharepoint: Optional[bool] = True # New field for controlling SharePoint upload
 
 VIDEO_JOBS: Dict[str, Dict[str, Any]] = {}
 
@@ -90,9 +91,13 @@ def update_job(job_id: str, **kwargs):
         VIDEO_JOBS[job_id].update(kwargs)
         VIDEO_JOBS[job_id]["updated_at"] = now_iso()
 
-async def run_video_job(job_id: str, app_name: str, transcript: str, repo_context: Optional[Dict[str, Any]] = None):
+async def run_video_job(job_id: str, app_name: str, transcript: str, repo_context: Optional[Dict[str, Any]] = None, upload_to_sharepoint_flag: bool = True):
     mp3_path = None
     mp4_path = None
+    sharepoint_upload_status = "skipped"
+    sharepoint_upload_error = None
+    sharepoint_url = None
+
     try:
         update_job(job_id, status="generating_mp3", message="Generating narration audio")
         mp3_name = f"{app_name.lower().replace(' ', '_').replace('-', '_')}_{uuid4().hex[:8]}.mp3"
@@ -111,28 +116,38 @@ async def run_video_job(job_id: str, app_name: str, transcript: str, repo_contex
         update_job(job_id, status="uploading_video", message="Uploading MP4 to storage")
         mp4_gcs = await asyncio.wait_for(asyncio.to_thread(upload_to_gcs, mp4_path), timeout=120)
 
-        sharepoint_url = None
-        sharepoint_webhook_url = os.environ.get("SHAREPOINT_WEBHOOK_URL")
-        if sharepoint_webhook_url and mp4_path:
-            try:
-                logging.info(f"Attempting to upload {os.path.basename(mp4_path)} to SharePoint...")
-                # Use repo_context description or transcript snippet as fallback
-                description = (repo_context or {}).get("description", transcript[:200] if transcript else "")
-                sharepoint_result = await asyncio.wait_for(
-                    asyncio.to_thread(upload_to_sharepoint, mp4_path, app_name, description),
-                    timeout=300
-                )
-                if sharepoint_result and sharepoint_result.get("sharepoint_link"):
-                    sharepoint_url = sharepoint_result["sharepoint_link"]
-                    logging.info(f"Successfully uploaded to SharePoint: {sharepoint_url}")
-                else:
-                    logging.warning(f"SharePoint upload succeeded but no link returned for {os.path.basename(mp4_path)}.")
-            except ValueError as e:
-                logging.warning(f"SharePoint upload skipped for {app_name}: {e}")
-            except Exception as e:
-                logging.warning(f"Failed to upload {os.path.basename(mp4_path)} to SharePoint: {e}", exc_info=True)
+        if upload_to_sharepoint_flag:
+            sharepoint_webhook_url = os.environ.get("SHAREPOINT_WEBHOOK_URL")
+            if sharepoint_webhook_url and mp4_path:
+                try:
+                    logging.info(f"SharePoint: Starting upload for {os.path.basename(mp4_path)}...")
+                    description = f"Generated media demo for {app_name}" # Use a more explicit description
+                    sharepoint_result = await asyncio.wait_for(
+                        asyncio.to_thread(upload_to_sharepoint, mp4_path, app_name, description),
+                        timeout=300
+                    )
+                    if sharepoint_result and sharepoint_result.get("sharepoint_link"):
+                        sharepoint_url = sharepoint_result["sharepoint_link"]
+                        sharepoint_upload_status = "uploaded"
+                        logging.info(f"SharePoint: Upload completed successfully to {sharepoint_url}")
+                    else:
+                        sharepoint_upload_status = "failed"
+                        sharepoint_upload_error = "SharePoint upload succeeded but no link returned."
+                        logging.warning(f"SharePoint: Upload succeeded but no link returned for {os.path.basename(mp4_path)}.")
+                except ValueError as e:
+                    sharepoint_upload_status = "failed"
+                    sharepoint_upload_error = str(e)
+                    logging.warning(f"SharePoint: Upload skipped for {app_name} due to configuration error: {e}")
+                except Exception as e:
+                    sharepoint_upload_status = "failed"
+                    sharepoint_upload_error = str(e)
+                    logging.warning(f"SharePoint: Failed to upload {os.path.basename(mp4_path)}: {e}", exc_info=True)
+            else:
+                sharepoint_upload_status = "skipped"
+                sharepoint_upload_error = "SHAREPOINT_WEBHOOK_URL not set or MP4 path missing."
+                logging.info("SharePoint: SHAREPOINT_WEBHOOK_URL not set or MP4 path missing. Skipping SharePoint upload.")
         else:
-            logging.info("SHAREPOINT_WEBHOOK_URL not set or MP4 path missing. Skipping SharePoint upload.")
+            logging.info("SharePoint: Upload to SharePoint explicitly skipped by request.")
 
         update_job(
             job_id,
@@ -145,7 +160,9 @@ async def run_video_job(job_id: str, app_name: str, transcript: str, repo_contex
                 "video_file_name": os.path.basename(mp4_path),
                 "video_local_path": mp4_path,
                 "video_gcs_path": mp4_gcs,
-                "sharepoint_url": sharepoint_url, # Add SharePoint URL to result
+                "sharepoint_status": sharepoint_upload_status,
+                "sharepoint_url": sharepoint_url,
+                "sharepoint_error": sharepoint_upload_error,
             },
             completed_at=now_iso(),
         )
@@ -172,8 +189,12 @@ def _default_video_prompt(name: str, transcript: str, repo_context: Optional[Dic
         f"Narration basis: {transcript[:1200]}"
     )
 
-async def run_veo_job(job_id: str, app_name: str, video_prompt: str, duration_seconds: int, transcript: str, repo_context: Optional[Dict[str, Any]] = None):
+async def run_veo_job(job_id: str, app_name: str, video_prompt: str, duration_seconds: int, transcript: str, repo_context: Optional[Dict[str, Any]] = None, upload_to_sharepoint_flag: bool = True):
     output_mp4_path = None
+    sharepoint_upload_status = "skipped"
+    sharepoint_upload_error = None
+    sharepoint_url = None
+
     try:
         update_job(job_id, status="rendering_video", message="Generating video with Veo Lite")
         client = genai.Client(vertexai=True, project="ctoteam", location="us-central1")
@@ -232,6 +253,9 @@ async def run_veo_job(job_id: str, app_name: str, video_prompt: str, duration_se
                     "video_local_path": str(mp4_path),
                     "video_gcs_path": mp4_gcs,
                     "veo_operation_name": getattr(operation, "name", None),
+                    "sharepoint_status": sharepoint_upload_status, # Still add status for consistency
+                    "sharepoint_url": sharepoint_url,
+                    "sharepoint_error": sharepoint_upload_error,
                 },
                 completed_at=now_iso(),
             )
@@ -246,27 +270,38 @@ async def run_veo_job(job_id: str, app_name: str, video_prompt: str, duration_se
         update_job(job_id, status="uploading_video", message="Uploading MP4 to storage")
         mp4_gcs = await asyncio.wait_for(asyncio.to_thread(upload_to_gcs, str(output_mp4_path)), timeout=180)
         
-        sharepoint_url = None
-        sharepoint_webhook_url = os.environ.get("SHAREPOINT_WEBHOOK_URL")
-        if sharepoint_webhook_url and output_mp4_path:
-            try:
-                logging.info(f"Attempting to upload {output_mp4_path.name} to SharePoint...")
-                description = (repo_context or {}).get("description", transcript[:200] if transcript else "")
-                sharepoint_result = await asyncio.wait_for(
-                    asyncio.to_thread(upload_to_sharepoint, str(output_mp4_path), app_name, description),
-                    timeout=300
-                )
-                if sharepoint_result and sharepoint_result.get("sharepoint_link"):
-                    sharepoint_url = sharepoint_result["sharepoint_link"]
-                    logging.info(f"Successfully uploaded to SharePoint: {sharepoint_url}")
-                else:
-                    logging.warning(f"SharePoint upload succeeded but no link returned for {output_mp4_path.name}.")
-            except ValueError as e:
-                logging.warning(f"SharePoint upload skipped for {app_name}: {e}")
-            except Exception as e:
-                logging.warning(f"Failed to upload {output_mp4_path.name} to SharePoint: {e}", exc_info=True)
+        if upload_to_sharepoint_flag:
+            sharepoint_webhook_url = os.environ.get("SHAREPOINT_WEBHOOK_URL")
+            if sharepoint_webhook_url and output_mp4_path:
+                try:
+                    logging.info(f"SharePoint: Starting upload for {output_mp4_path.name} (Veo job)...")
+                    description = f"Generated media demo for {app_name}" # Use a more explicit description
+                    sharepoint_result = await asyncio.wait_for(
+                        asyncio.to_thread(upload_to_sharepoint, str(output_mp4_path), app_name, description),
+                        timeout=300
+                    )
+                    if sharepoint_result and sharepoint_result.get("sharepoint_link"):
+                        sharepoint_url = sharepoint_result["sharepoint_link"]
+                        sharepoint_upload_status = "uploaded"
+                        logging.info(f"SharePoint: Upload completed successfully to {sharepoint_url} (Veo job).")
+                    else:
+                        sharepoint_upload_status = "failed"
+                        sharepoint_upload_error = "SharePoint upload succeeded but no link returned."
+                        logging.warning(f"SharePoint: Upload succeeded but no link returned for {output_mp4_path.name} (Veo job).")
+                except ValueError as e:
+                    sharepoint_upload_status = "failed"
+                    sharepoint_upload_error = str(e)
+                    logging.warning(f"SharePoint: Upload skipped for {app_name} (Veo job) due to configuration error: {e}")
+                except Exception as e:
+                    sharepoint_upload_status = "failed"
+                    sharepoint_upload_error = str(e)
+                    logging.warning(f"SharePoint: Failed to upload {output_mp4_path.name} (Veo job): {e}", exc_info=True)
+            else:
+                sharepoint_upload_status = "skipped"
+                sharepoint_upload_error = "SHAREPOINT_WEBHOOK_URL not set or MP4 path missing."
+                logging.info("SharePoint: SHAREPOINT_WEBHOOK_URL not set or MP4 path missing. Skipping SharePoint upload (Veo job).")
         else:
-            logging.info("SHAREPOINT_WEBHOOK_URL not set or MP4 path missing. Skipping SharePoint upload.")
+            logging.info("SharePoint: Upload to SharePoint explicitly skipped by request (Veo job).")
 
         update_job(
             job_id,
@@ -280,7 +315,9 @@ async def run_veo_job(job_id: str, app_name: str, video_prompt: str, duration_se
                 "video_file_name": output_mp4_path.name,
                 "video_local_path": str(output_mp4_path),
                 "video_gcs_path": mp4_gcs,
-                "sharepoint_url": sharepoint_url, # Add SharePoint URL to result
+                "sharepoint_status": sharepoint_upload_status,
+                "sharepoint_url": sharepoint_url,
+                "sharepoint_error": sharepoint_upload_error,
             },
             completed_at=now_iso(),
         )
@@ -439,10 +476,12 @@ async def generate_video_endpoint(request_body: VideoGenerateRequest):
         "estimated_cost_usd": round(duration_seconds * 0.05, 4) if renderer_mode == "veo_lite" else 0.0,
         "duration_seconds": duration_seconds,
     }
+    upload_to_sharepoint_flag = request_body.upload_to_sharepoint if request_body.upload_to_sharepoint is not None else True
+
     if renderer_mode == "veo_lite":
-        asyncio.create_task(run_veo_job(job_id, app_name, video_prompt, duration_seconds, transcript, repo_context))
+        asyncio.create_task(run_veo_job(job_id, app_name, video_prompt, duration_seconds, transcript, repo_context, upload_to_sharepoint_flag))
     else:
-        asyncio.create_task(run_video_job(job_id, app_name, transcript, repo_context))
+        asyncio.create_task(run_video_job(job_id, app_name, transcript, repo_context, upload_to_sharepoint_flag))
     return {"job_id": job_id, "status": "queued"}
 
 @app.get("/api/jobs/{job_id}")
