@@ -10,7 +10,7 @@ export default function DemosPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredRepos, setFilteredRepos] = useState([]);
 
-  const API_BASE_URL = 'http://localhost:8000'; // Define API base URL
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'; // Use environment variable
 
   useEffect(() => {
     async function fetchRepos() {
@@ -29,7 +29,7 @@ export default function DemosPage() {
       }
     }
     fetchRepos();
-  }, []);
+  }, [API_BASE_URL]); // Add API_BASE_URL to dependency array
 
   useEffect(() => {
     const lowerCaseSearchTerm = searchTerm.toLowerCase();
