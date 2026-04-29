@@ -24,6 +24,7 @@ from agents.transcript_agent import generate_transcript
 from agents.github_reader_agent import get_repo_context # New import
 from agents.tts_agent import text_to_mp3
 from agents.gcs_agent import upload_to_gcs
+from agents.sharepoint_uploader import upload_to_sharepoint
 from agents.video_agent import mp3_to_video
 from google import genai
 from google.genai import types as genai_types
