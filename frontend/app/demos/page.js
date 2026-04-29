@@ -10,7 +10,7 @@ export default function DemosPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredRepos, setFilteredRepos] = useState([]);
 
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:8000` : 'http://localhost:8000');
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || `http://${window.location.hostname}:8000`;
   
   console.log("API_BASE_URL (Demos Page):", API_BASE_URL);
 
