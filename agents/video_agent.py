@@ -218,12 +218,21 @@ def mp3_to_video(mp3_path: str, output_name: str, title: str, transcript: str, r
                 caption = _to_words((sp.get("caption") or "").strip(), 12)
                 if not caption:
                     continue
+                title_txt = _to_words(sp.get("title") or f"Scene {i}", 4)
+                subtitle_txt = _to_words(sp.get("subtitle") or "", 10)
+                bullets = [
+                    _to_words(sp.get("bullet_1") or "User asks sales, region, or conversion questions", 10),
+                    _to_words(sp.get("bullet_2") or "Gemini agent selects SQL prediction and chart tools", 10),
+                    _to_words(sp.get("bullet_3") or "BigQuery returns dashboard-ready answers", 10),
+                ]
+                bullets = [b for b in bullets if b and b.lower() not in {title_txt.lower(), subtitle_txt.lower()}]
                 scenes.append({
                     "id": i,
                     "beat": sp.get("beat") if sp.get("beat") in beats else beats[i-1],
-                    "header": _to_words(sp.get("title") or f"Scene {i}", 4),
-                    "subtitle": _to_words(sp.get("subtitle") or "", 10),
+                    "header": title_txt,
+                    "subtitle": subtitle_txt,
                     "caption": caption,
+                    "bullets": bullets[:3],
                     "mermaid_diagram": sp.get("mermaid_diagram") or sp.get("diagram") or "",
                     "node_state": {"done": [], "active": "", "pending": []},
                 })
@@ -253,6 +262,11 @@ def mp3_to_video(mp3_path: str, output_name: str, title: str, transcript: str, r
                 "title": _to_words(sp.get("title") or f"Scene {i+1}", 5),
                 "subtitle": _to_words(sp.get("subtitle") or "", 10),
                 "voiceover": _to_words(sp.get("caption") or "", 24) or _to_words(transcript, 24),
+                "bullets": [
+                    "User asks sales, region, or conversion questions",
+                    "Gemini agent selects SQL prediction and chart tools",
+                    "BigQuery returns dashboard-ready answers",
+                ],
                 "visual_points": [
                     _to_words((sp.get("beat") or "workflow").replace("_", " "), 6),
                     _to_words((sp.get("title") or "insight"), 6),

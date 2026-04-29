@@ -47,6 +47,7 @@ def render_mermaid_video(plan: Dict[str, Any], product_name: str, output_mp4_pat
                     "title": scene.get("header") or scene.get("title") or "",
                     "subtitle": scene.get("subtitle") or "",
                     "caption": scene.get("caption", "")[:120],
+                    "bullets": scene.get("bullets", []),
                     "mermaid_graph": scene_graph,
                     "done": scene.get("node_state", {}).get("done", []),
                     "active": scene.get("node_state", {}).get("active", ""),
