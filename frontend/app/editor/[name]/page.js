@@ -40,7 +40,10 @@ export default function EditorPage() {
     failed: 'Failed',
   };
 
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || `http://${window.location.hostname}:8000`;
+  let resolvedApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || `http://${window.location.hostname}:8000`;
+  // Normalize the base URL: remove any trailing /api/v1 or / to ensure clean concatenation
+  resolvedApiBaseUrl = resolvedApiBaseUrl.replace(/\/api\/v1\/?$/, '').replace(/\/$/, '');
+  const API_BASE_URL = resolvedApiBaseUrl;
   
   console.log("API_BASE_URL (Editor Page):", API_BASE_URL);
 

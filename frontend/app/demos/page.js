@@ -10,13 +10,16 @@ export default function DemosPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredRepos, setFilteredRepos] = useState([]);
 
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || `http://${window.location.hostname}:8000`;
+  let resolvedApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || `http://${window.location.hostname}:8000`;
+  // Normalize the base URL: remove any trailing /api/v1 or / to ensure clean concatenation
+  resolvedApiBaseUrl = resolvedApiBaseUrl.replace(/\/api\/v1\/?$/, '').replace(/\/$/, '');
+  const API_BASE_URL = resolvedApiBaseUrl;
   
   console.log("API_BASE_URL (Demos Page):", API_BASE_URL);
 
   useEffect(() => {
     async function fetchRepos() {
-      const fetchUrl = `${API_BASE_URL}/api/repos`; // Ensure no double /api
+      const fetchUrl = `${API_BASE_URL}/api/repos`;
       console.log("Repos API URL:", fetchUrl);
       try {
         setLoading(true);
