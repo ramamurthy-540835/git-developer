@@ -110,6 +110,29 @@ async def run_video_job(job_id: str, app_name: str, transcript: str, repo_contex
         update_job(job_id, status="uploading_video", message="Uploading MP4 to storage")
         mp4_gcs = await asyncio.wait_for(asyncio.to_thread(upload_to_gcs, mp4_path), timeout=120)
 
+        sharepoint_url = None
+        sharepoint_webhook_url = os.environ.get("SHAREPOINT_WEBHOOK_URL")
+        if sharepoint_webhook_url and mp4_path:
+            try:
+                logging.info(f"Attempting to upload {os.path.basename(mp4_path)} to SharePoint...")
+                # Use repo_context description or transcript snippet as fallback
+                description = (repo_context or {}).get("description", transcript[:200] if transcript else "")
+                sharepoint_result = await asyncio.wait_for(
+                    asyncio.to_thread(upload_to_sharepoint, mp4_path, app_name, description),
+                    timeout=300
+                )
+                if sharepoint_result and sharepoint_result.get("sharepoint_link"):
+                    sharepoint_url = sharepoint_result["sharepoint_link"]
+                    logging.info(f"Successfully uploaded to SharePoint: {sharepoint_url}")
+                else:
+                    logging.warning(f"SharePoint upload succeeded but no link returned for {os.path.basename(mp4_path)}.")
+            except ValueError as e:
+                logging.warning(f"SharePoint upload skipped for {app_name}: {e}")
+            except Exception as e:
+                logging.warning(f"Failed to upload {os.path.basename(mp4_path)} to SharePoint: {e}", exc_info=True)
+        else:
+            logging.info("SHAREPOINT_WEBHOOK_URL not set or MP4 path missing. Skipping SharePoint upload.")
+
         update_job(
             job_id,
             status="completed",
@@ -121,6 +144,7 @@ async def run_video_job(job_id: str, app_name: str, transcript: str, repo_contex
                 "video_file_name": os.path.basename(mp4_path),
                 "video_local_path": mp4_path,
                 "video_gcs_path": mp4_gcs,
+                "sharepoint_url": sharepoint_url, # Add SharePoint URL to result
             },
             completed_at=now_iso(),
         )
@@ -220,6 +244,29 @@ async def run_veo_job(job_id: str, app_name: str, video_prompt: str, duration_se
 
         update_job(job_id, status="uploading_video", message="Uploading MP4 to storage")
         mp4_gcs = await asyncio.wait_for(asyncio.to_thread(upload_to_gcs, str(output_mp4_path)), timeout=180)
+        
+        sharepoint_url = None
+        sharepoint_webhook_url = os.environ.get("SHAREPOINT_WEBHOOK_URL")
+        if sharepoint_webhook_url and output_mp4_path:
+            try:
+                logging.info(f"Attempting to upload {output_mp4_path.name} to SharePoint...")
+                description = (repo_context or {}).get("description", transcript[:200] if transcript else "")
+                sharepoint_result = await asyncio.wait_for(
+                    asyncio.to_thread(upload_to_sharepoint, str(output_mp4_path), app_name, description),
+                    timeout=300
+                )
+                if sharepoint_result and sharepoint_result.get("sharepoint_link"):
+                    sharepoint_url = sharepoint_result["sharepoint_link"]
+                    logging.info(f"Successfully uploaded to SharePoint: {sharepoint_url}")
+                else:
+                    logging.warning(f"SharePoint upload succeeded but no link returned for {output_mp4_path.name}.")
+            except ValueError as e:
+                logging.warning(f"SharePoint upload skipped for {app_name}: {e}")
+            except Exception as e:
+                logging.warning(f"Failed to upload {output_mp4_path.name} to SharePoint: {e}", exc_info=True)
+        else:
+            logging.info("SHAREPOINT_WEBHOOK_URL not set or MP4 path missing. Skipping SharePoint upload.")
+
         update_job(
             job_id,
             status="completed",
@@ -232,6 +279,7 @@ async def run_veo_job(job_id: str, app_name: str, video_prompt: str, duration_se
                 "video_file_name": output_mp4_path.name,
                 "video_local_path": str(output_mp4_path),
                 "video_gcs_path": mp4_gcs,
+                "sharepoint_url": sharepoint_url, # Add SharePoint URL to result
             },
             completed_at=now_iso(),
         )

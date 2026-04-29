@@ -12,6 +12,7 @@ In today's data-rich environments, managing, processing, and interacting with me
 *   **User Interface (UI)**: Provides an interactive and intuitive interface for users to manage and monitor media operations.
 *   **API Endpoints**: Offers a programmatic interface for interacting with the media agent, enabling integration with other systems.
 *   **Autonomous Agents/Scripts**: Executes intelligent, self-contained scripts to perform automated tasks and processes related to media.
+*   **SharePoint Integration**: Automates the upload of generated video content to a configured SharePoint Media Library, streamlining content distribution.
 *   **Automation Scripts**: Includes various utility scripts to automate repetitive tasks and enhance overall system efficiency.
 *   **Comprehensive Documentation**: Includes this README to guide users and contributors.
 
