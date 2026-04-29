@@ -10,20 +10,30 @@ export default function DemosPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredRepos, setFilteredRepos] = useState([]);
 
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'; // Use environment variable
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://10.100.15.44:8000";
+  
+  console.log("API_BASE_URL (Demos Page):", API_BASE_URL);
 
   useEffect(() => {
     async function fetchRepos() {
+      const fetchUrl = `${API_BASE_URL}/api/repos`;
+      console.log("Repos API URL:", fetchUrl);
       try {
-        const response = await fetch(`${API_BASE_URL}/api/repos`);
+        setLoading(true);
+        setError(null); // Clear previous errors
+        const response = await fetch(fetchUrl);
         if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+          const errorDetail = await response.text();
+          throw new Error(`HTTP error! Status: ${response.status}. URL: ${fetchUrl}. Detail: ${errorDetail}`);
         }
         const data = await response.json();
-        setRepos(data.repos); // Assuming the backend returns { "repos": [...] }
-        setFilteredRepos(data.repos);
+        console.log("Repos API response:", data);
+        const repoList = Array.isArray(data) ? data : data.repos || [];
+        setRepos(repoList);
+        setFilteredRepos(repoList);
       } catch (e) {
-        setError(e.message);
+        console.error("Fetch repos failed:", e);
+        setError(`Failed to fetch repositories: ${e.message}`);
       } finally {
         setLoading(false);
       }
@@ -80,7 +90,7 @@ export default function DemosPage() {
             </div>
           ))
         ) : (
-          <p className="col-span-full text-center text-gray-500">No repositories found matching your criteria.</p>
+          <p className="col-span-full text-center text-gray-500">No repositories found.</p>
         )}
       </div>
     </div>
