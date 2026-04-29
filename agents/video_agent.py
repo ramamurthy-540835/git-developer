@@ -24,6 +24,18 @@ def _split_sentences(text: str) -> list[str]:
 def _to_words(text: str, limit: int) -> str:
     return " ".join(_clean_text(text).split()[:limit]).strip()
 
+
+def _is_generic_line(text: str) -> bool:
+    t = _clean_text(text).lower()
+    banned = [
+        "old data methods fail",
+        "generic dashboard",
+        "ai-powered analysis",
+        "better decisions",
+        "business growth",
+    ]
+    return any(b in t for b in banned)
+
 def _theme_for_repo(title: str) -> dict:
     lower = (title or "").lower()
     if "health" in lower or "care" in lower:
@@ -194,12 +206,37 @@ def mp3_to_video(mp3_path: str, output_name: str, title: str, transcript: str, r
     probe = ffmpeg.probe(mp3_path)
     duration = float(probe['streams'][0]['duration'])
 
-    # Try Remotion first for higher-quality deterministic scene rendering.
+    # Try scene-plan-aware rendering path first (exact 4 beats, per-scene mermaid).
     output_dir = "output"
     output_mp4_path = os.path.join(output_dir, output_name)
     try:
-        plan = build_scene_plan(title, transcript, duration_seconds=32, fps=30)
-        # Primary local path: Mermaid-led Playwright renderer
+        explicit_scene_plan = (repo_context or {}).get("scene_plan") or []
+        if explicit_scene_plan and isinstance(explicit_scene_plan, list) and len(explicit_scene_plan) >= 4:
+            scenes = []
+            beats = ["problem", "workflow", "ai_insight", "outcome"]
+            for i, sp in enumerate(explicit_scene_plan[:4], start=1):
+                caption = _to_words((sp.get("caption") or "").strip(), 12)
+                if not caption:
+                    continue
+                scenes.append({
+                    "id": i,
+                    "beat": sp.get("beat") if sp.get("beat") in beats else beats[i-1],
+                    "header": _to_words(sp.get("title") or f"Scene {i}", 4),
+                    "subtitle": _to_words(sp.get("subtitle") or "", 10),
+                    "caption": caption,
+                    "mermaid_diagram": sp.get("mermaid_diagram") or sp.get("diagram") or "",
+                    "node_state": {"done": [], "active": "", "pending": []},
+                })
+            if len(scenes) == 4:
+                plan = {
+                    "video": {"duration_s": int(duration), "fps": 30, "resolution": "1080p", "aspect": "16:9"},
+                    "mermaid_graph": "",
+                    "scenes": scenes,
+                }
+            else:
+                plan = build_scene_plan(title, transcript, duration_seconds=32, fps=30)
+        else:
+            plan = build_scene_plan(title, transcript, duration_seconds=32, fps=30)
         try:
             return render_mermaid_video(plan, title, output_mp4_path, fps=30)
         except Exception as e1:
@@ -209,7 +246,23 @@ def mp3_to_video(mp3_path: str, output_name: str, title: str, transcript: str, r
         logging.warning("Remotion path unavailable, falling back to ffmpeg overlay renderer: %s", e)
 
     # Build storyboard text for fallback overlay progression.
-    scenes = _build_story_plan_with_gemini(title, transcript, repo_context)
+    explicit_scene_plan = (repo_context or {}).get("scene_plan") or []
+    if explicit_scene_plan and isinstance(explicit_scene_plan, list) and len(explicit_scene_plan) >= 4:
+        scenes = [
+            {
+                "title": _to_words(sp.get("title") or f"Scene {i+1}", 5),
+                "subtitle": _to_words(sp.get("subtitle") or "", 10),
+                "voiceover": _to_words(sp.get("caption") or "", 24) or _to_words(transcript, 24),
+                "visual_points": [
+                    _to_words((sp.get("beat") or "workflow").replace("_", " "), 6),
+                    _to_words((sp.get("title") or "insight"), 6),
+                    _to_words((sp.get("subtitle") or "action"), 6),
+                ],
+            }
+            for i, sp in enumerate(explicit_scene_plan[:4])
+        ]
+    else:
+        scenes = _build_story_plan_with_gemini(title, transcript, repo_context)
     mermaid_steps = _extract_mermaid_steps(repo_context)
     theme = _theme_for_repo(title)
 

@@ -6,7 +6,14 @@ import sys
 from pathlib import Path
 from typing import Dict, Any, Optional
 
+SHAREPOINT_SITE_BASE = "https://mastechdigital.sharepoint.com/sites/MastechDigitalGCPStudio"
+SHAREPOINT_LIBRARY_PATH = "Media%20Library/GCP-Studio-Demos"
+
 logger = logging.getLogger(__name__)
+
+def _build_sharepoint_link(filename: str) -> str:
+    return f"{SHAREPOINT_SITE_BASE}/{SHAREPOINT_LIBRARY_PATH}/{filename}"
+
 
 def upload_to_sharepoint(mp4_path: str, demo_title: str, description: str = "", timeout_s: int = 300) -> Dict[str, Any]:
     """
@@ -56,24 +63,38 @@ def upload_to_sharepoint(mp4_path: str, demo_title: str, description: str = "", 
         response = requests.post(sharepoint_webhook_url, json=payload, timeout=timeout_s)
         response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
 
-        response_json = {}
+        response_json: Dict[str, Any] = {}
+        sharepoint_link: Optional[str] = None
         try:
-            # Attempt to parse JSON, but handle cases where body might be empty
-            if response.text:
+            # Parse JSON only when body exists; Power Automate may return 200 with empty body.
+            if response.text and response.text.strip():
                 response_json = response.json()
         except requests.exceptions.JSONDecodeError:
             logger.warning(f"SharePoint webhook returned non-JSON response: {response.text[:200]}")
-            response_json = {"message": response.text} # Store raw text if not JSON
+            response_json = {"message": response.text}
+
+        if isinstance(response_json, dict):
+            sharepoint_link = response_json.get("sharepoint_link")
+
+        if not sharepoint_link:
+            sharepoint_link = _build_sharepoint_link(filename)
+            logger.warning(
+                "SharePoint upload succeeded but no response body; constructed URL manually: %s",
+                sharepoint_link,
+            )
 
         result = {
             "status_code": response.status_code,
             "filename": filename,
-            **response_json # Merge any parsed JSON into result
+            "sharepoint_link": sharepoint_link,
         }
+        if response_json:
+            # Keep additional webhook fields if present.
+            result.update(response_json)
+            result["sharepoint_link"] = sharepoint_link
 
         logger.info(f"Successfully uploaded {filename} to SharePoint. Status: {response.status_code}")
-        if 'sharepoint_link' in response_json:
-            logger.info(f"SharePoint link: {response_json['sharepoint_link']}")
+        logger.info(f"SharePoint link: {sharepoint_link}")
         
         return result
 

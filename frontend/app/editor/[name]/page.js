@@ -28,24 +28,41 @@ export default function EditorPage() {
   const [rendererMode, setRendererMode] = useState('local_ffmpeg');
   const [videoPrompt, setVideoPrompt] = useState('');
   const [durationSeconds, setDurationSeconds] = useState(32);
+  const [expandPrompt, setExpandPrompt] = useState(false);
   const [autoPromptMode, setAutoPromptMode] = useState(true);
+  const [useScenePlan, setUseScenePlan] = useState(true);
+  const [expandedSceneIds, setExpandedSceneIds] = useState({});
+  const [scenePlanError, setScenePlanError] = useState(null);
+  const [scenePlanSpecificity, setScenePlanSpecificity] = useState(null);
+  const [activeSceneIdx, setActiveSceneIdx] = useState(0);
+  const [showAdvancedPrompt, setShowAdvancedPrompt] = useState(false);
   const [uploadToSharePoint, setUploadToSharePoint] = useState(true); // New state for SharePoint upload checkbox
+  const [scenePlan, setScenePlan] = useState([]);
+  const [loadingScenePlan, setLoadingScenePlan] = useState(false);
   const statusText = {
     queued: 'Queued',
     generating_mp3: 'Generating audio',
     uploading_mp3: 'Uploading audio',
     rendering_video: 'Rendering video',
     uploading_video: 'Uploading video',
+    saving_video: 'Saving generated video',
     completed: 'Completed',
     failed: 'Failed',
   };
 
-  let resolvedApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || `http://${window.location.hostname}:8000`;
-  // Normalize the base URL: remove any trailing /api/v1 or / to ensure clean concatenation
-  resolvedApiBaseUrl = resolvedApiBaseUrl.replace(/\/api\/v1\/?$/, '').replace(/\/$/, '');
-  const API_BASE_URL = resolvedApiBaseUrl;
-  
-  console.log("API_BASE_URL (Editor Page):", API_BASE_URL);
+  const fallbackApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
+    ? process.env.NEXT_PUBLIC_API_BASE_URL.replace(/\/api\/v1\/?$/, '').replace(/\/api\/?$/, '').replace(/\/$/, '')
+    : '';
+
+  const apiFetch = useCallback(async (path, options) => {
+    const primaryPath = path;
+    try {
+      return await fetch(primaryPath, options);
+    } catch (primaryError) {
+      if (!fallbackApiBaseUrl) throw primaryError;
+      return await fetch(`${fallbackApiBaseUrl}${path}`, options);
+    }
+  }, [fallbackApiBaseUrl]);
 
   // Function to fetch repository metadata from config/repos.yaml
   const fetchRepoMetadata = useCallback(async () => {
@@ -58,7 +75,7 @@ export default function EditorPage() {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`${API_BASE_URL}/api/repos/${fullRepoName}`);
+      const response = await apiFetch(`/api/repos/${fullRepoName}`);
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.detail || `Failed to fetch repository metadata! Status: ${response.status}`);
@@ -68,10 +85,11 @@ export default function EditorPage() {
     } catch (e) {
       console.error("Error fetching repository metadata:", e);
       setError(e.message);
+      setScenePlanError(e.message);
     } finally {
       setLoading(false);
     }
-  }, [fullRepoName]);
+  }, [fullRepoName, apiFetch]);
 
   // Function to fetch repository context (README, files, tech stack)
   const readRepoContext = useCallback(async () => {
@@ -82,7 +100,7 @@ export default function EditorPage() {
     try {
       setLoadingRepoContext(true);
       setError(null);
-      const response = await fetch(`${API_BASE_URL}/api/repo-context`, {
+      const response = await apiFetch(`/api/repo-context`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ repo_url: repoUrl }),
@@ -99,12 +117,23 @@ export default function EditorPage() {
     } finally {
       setLoadingRepoContext(false);
     }
-  }, [repoUrl]);
+  }, [repoUrl, apiFetch]);
 
   // Function to generate transcript using repo context
   const generateTranscriptFromRepoContext = useCallback(async () => {
-    if (!repoMetadata) {
-      setError("Cannot generate transcript: Repository metadata not loaded.");
+    const effectiveRepoMetadata = repoMetadata || {
+      name: fullRepoName?.split('/').pop() || fullRepoName || 'unknown-repo',
+      full_name: fullRepoName,
+      repo_url: repoUrl || '',
+      description: repoContext?.description || '',
+      language: null,
+      private: null,
+      updated_at: null,
+      tags: [],
+      url: null,
+    };
+    if (!effectiveRepoMetadata.full_name || !effectiveRepoMetadata.repo_url) {
+      setError("Cannot generate transcript: repository metadata and repo URL are missing.");
       return;
     }
     try {
@@ -114,18 +143,18 @@ export default function EditorPage() {
 
       // Prepare app data from repoMetadata
       const appDataForTranscript = {
-        name: repoMetadata.name,
-        full_name: repoMetadata.full_name,
-        repo_url: repoMetadata.repo_url,
-        description: repoMetadata.description,
-        language: repoMetadata.language,
-        private: repoMetadata.private,
-        updated_at: repoMetadata.updated_at,
-        tags: repoMetadata.tags || [],
-        url: repoMetadata.url, // Include original URL if it exists
+        name: effectiveRepoMetadata.name,
+        full_name: effectiveRepoMetadata.full_name,
+        repo_url: effectiveRepoMetadata.repo_url,
+        description: effectiveRepoMetadata.description,
+        language: effectiveRepoMetadata.language,
+        private: effectiveRepoMetadata.private,
+        updated_at: effectiveRepoMetadata.updated_at,
+        tags: effectiveRepoMetadata.tags || [],
+        url: effectiveRepoMetadata.url, // Include original URL if it exists
       };
 
-      const response = await fetch(`${API_BASE_URL}/api/transcript`, {
+      const response = await apiFetch(`/api/transcript`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ app: appDataForTranscript }),
@@ -148,8 +177,65 @@ export default function EditorPage() {
     } finally {
       setLoadingTranscript(false);
     }
-  }, [repoMetadata]);
+  }, [repoMetadata, fullRepoName, repoUrl, repoContext?.description, apiFetch]);
 
+
+
+  const handleGenerateScenePlan = useCallback(async () => {
+    if (!repoUrl) {
+      setError("Repository URL not provided.");
+      return;
+    }
+    try {
+      setLoadingScenePlan(true);
+      setError(null);
+      const response = await apiFetch(`/api/scene-plan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repo_url: repoUrl,
+          product_name: repoMetadata?.name || fullRepoName,
+          architecture_mmd: repoContext?.architecture_mmd || '',
+        }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || `Failed to generate scene plan! Status: ${response.status}`);
+      }
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error || 'Scene plan generation failed.');
+      setScenePlan(Array.isArray(data.scenes) ? data.scenes : []);
+      setScenePlanSpecificity(data.specificity_score ?? null);
+      setScenePlanError(null);
+    } catch (e) {
+      console.error('Error generating scene plan:', e);
+      setError(e.message);
+    } finally {
+      setLoadingScenePlan(false);
+    }
+  }, [repoUrl, repoMetadata?.name, fullRepoName, repoContext, apiFetch]);
+
+  const updateSceneCaption = (index, caption) => {
+    setScenePlan((prev) => prev.map((scene, i) => (i === index ? { ...scene, caption } : scene)));
+  };
+  const toggleSceneCard = (id) => {
+    setExpandedSceneIds((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+
+  const steps = [
+    { key: 'repo', label: 'Load Repo', done: !!repoMetadata },
+    { key: 'plan', label: 'Scene Plan', done: scenePlan.length === 4 },
+    { key: 'narration', label: 'Narration', done: !!(transcript || (useScenePlan && scenePlan.some((s) => s.caption))) },
+    { key: 'video', label: 'Generate Video', done: videoJob?.status === 'completed' },
+  ];
+
+  const jobTimeline = ['queued', 'generating_mp3', 'uploading_mp3', 'rendering_video', 'saving_video', 'uploading_video', 'completed'];
+  const currentJobIndex = videoJob ? Math.max(0, jobTimeline.indexOf(videoJob.status)) : -1;
+
+  const updateSceneField = (index, field, value) => {
+    setScenePlan((prev) => prev.map((scene, i) => (i === index ? { ...scene, [field]: value } : scene)));
+  };
 
   useEffect(() => {
     fetchRepoMetadata();
@@ -187,7 +273,10 @@ export default function EditorPage() {
 
 
   const handleGenerateMp3 = async () => {
-    if (!transcript || !transcript.trim()) {
+    const effectiveTranscript = useScenePlan && scenePlan.length > 0
+      ? scenePlan.map((sp) => sp.caption).filter(Boolean).join('. ')
+      : transcript;
+    if (!effectiveTranscript || !effectiveTranscript.trim()) {
       setError("Transcript is empty. Generate transcript first.");
       return;
     }
@@ -197,7 +286,7 @@ export default function EditorPage() {
       setMp3Result(null);
       setMp3Status('Submitting MP3 request...');
       // Assuming 'transcript' state holds the current editable content
-      const response = await fetch(`${API_BASE_URL}/api/generate-mp3`, {
+      const response = await apiFetch(`/api/generate-mp3`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -224,7 +313,10 @@ export default function EditorPage() {
   };
 
   const handleGenerateVideo = async () => {
-    if (!transcript || !transcript.trim()) {
+    const effectiveTranscript = useScenePlan && scenePlan.length > 0
+      ? scenePlan.map((sp) => sp.caption).filter(Boolean).join('. ')
+      : transcript;
+    if (!effectiveTranscript || !effectiveTranscript.trim()) {
       setError("Transcript is empty. Generate transcript first.");
       return;
     }
@@ -233,17 +325,19 @@ export default function EditorPage() {
       setError(null);
       setVideoJob(null);
       setVideoJobId(null);
-      const response = await fetch(`${API_BASE_URL}/api/generate-video`, {
+      const response = await apiFetch(`/api/generate-video`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: repoMetadata?.name || fullRepoName,
-          transcript: transcript,
+          transcript: effectiveTranscript,
           repo_context: repoContext || {},
+          use_scene_plan: useScenePlan,
           renderer_mode: rendererMode,
           video_prompt: videoPrompt,
           duration_seconds: durationSeconds,
           upload_to_sharepoint: uploadToSharePoint, // Include the new flag
+          scene_plan: useScenePlan ? scenePlan : [],
         }),
       });
       if (!response.ok) {
@@ -264,7 +358,7 @@ export default function EditorPage() {
     let active = true;
     const poll = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/jobs/${videoJobId}`);
+        const res = await apiFetch(`/api/jobs/${videoJobId}`);
         if (!res.ok) return;
         const data = await res.json();
         if (!active) return;
@@ -280,7 +374,7 @@ export default function EditorPage() {
     return () => {
       active = false;
     };
-  }, [videoJobId, API_BASE_URL]);
+  }, [videoJobId, apiFetch]);
 
   // Helper to render lists of strings
   const renderList = (items, label) => (
@@ -313,7 +407,14 @@ export default function EditorPage() {
     <div className="container mx-auto p-4">
       <Link href="/demos" className="text-blue-600 hover:underline mb-4 inline-block">&larr; Back to Repositories</Link>
       <h1 className="text-3xl font-bold mb-4 text-gray-800">Editor for: {repoMetadata?.name || fullRepoName}</h1>
-      <p className="text-gray-600 mb-6">{repoMetadata?.description || 'No description available.'}</p>
+      <p className="text-gray-600 mb-3">{repoMetadata?.description || 'No description available.'}</p>
+      <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-2">
+        {steps.map((step) => (
+          <div key={step.key} className={`px-3 py-2 rounded border text-sm ${step.done ? 'bg-green-50 border-green-300 text-green-800' : 'bg-gray-50 border-gray-200 text-gray-600'}`}>
+            {step.label}
+          </div>
+        ))}
+      </div>
 
       {error && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
@@ -412,12 +513,12 @@ export default function EditorPage() {
         <button
           onClick={handleGenerateVideo}
           disabled={loadingVideo || (videoJob && (videoJob.status !== 'completed' && videoJob.status !== 'failed'))}
-          className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition duration-150 ease-in-out"
+          className="bg-red-700 hover:bg-red-800 text-white font-bold py-3 px-6 rounded-lg text-lg shadow-md transition duration-150 ease-in-out"
         >
           {loadingVideo ? 'Submitting Video Job...' : 'Generate Video'}
         </button>
       </div>
-      <div className="mt-6 bg-white rounded-lg shadow-md p-6 border border-gray-200">
+      <div className="mt-6 bg-white rounded-lg shadow-md p-6 border border-gray-200 space-y-4">
         <h3 className="text-xl font-semibold mb-3 text-gray-800">Video Renderer</h3>
         <div className="flex gap-6 mb-4">
           <label className="flex items-center gap-2">
@@ -452,13 +553,111 @@ export default function EditorPage() {
         {rendererMode === 'veo_lite' && (
           <p className="text-sm text-red-600 mb-3">Veo generation is chargeable. Use local mode for testing.</p>
         )}
-        <label className="block text-md font-medium text-gray-700 mb-2">Editable Video Prompt</label>
+        <div className="flex items-center justify-between mb-2">
+          <label className="block text-lg font-semibold text-gray-800">Editable Video Prompt</label>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowAdvancedPrompt((v) => !v)}
+              className="text-sm bg-slate-200 hover:bg-slate-300 text-slate-900 font-medium py-1 px-3 rounded"
+            >
+              {showAdvancedPrompt ? 'Hide Advanced' : 'Show Advanced'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setExpandPrompt((v) => !v)}
+              className="text-sm bg-gray-200 hover:bg-gray-300 text-gray-900 font-medium py-1 px-3 rounded"
+            >
+              {expandPrompt ? 'Compact' : 'Expand'}
+            </button>
+          </div>
+        </div>
+        {showAdvancedPrompt && (
         <textarea
-          className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-40 text-gray-800"
+          className="w-full p-4 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800 overflow-y-auto"
           value={videoPrompt}
           onChange={(e) => setVideoPrompt(e.target.value)}
+          rows={16}
+          style={{ minHeight: expandPrompt ? '70vh' : '500px', height: 'auto' }}
         />
+        )}
       </div>
+
+      <div className="mt-6 bg-white rounded-lg shadow-md p-6 border border-gray-200">
+        <h3 className="text-xl font-semibold mb-3 text-gray-800">Scene Plan (Mermaid-driven)</h3>
+        <div className="flex items-center gap-4 mb-3">
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <input type="checkbox" checked={useScenePlan} onChange={(e) => setUseScenePlan(e.target.checked)} />
+            <span>Use Scene Plan</span>
+          </label>
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" checked={!useScenePlan} onChange={(e) => setUseScenePlan(!e.target.checked)} />
+            <span>Use raw prompt instead</span>
+          </label>
+        </div>
+        <button
+          onClick={handleGenerateScenePlan}
+          disabled={loadingScenePlan || !repoUrl}
+          className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-md mb-4"
+        >
+          {loadingScenePlan ? 'Generating Scene Plan...' : 'Auto-generate repo-specific scene plan'}
+        </button>
+        {scenePlanSpecificity !== null && scenePlanSpecificity < 65 && (
+          <div className="bg-amber-100 border border-amber-300 text-amber-800 px-3 py-2 rounded mb-3">
+            Scene plan may still be generic (specificity score: {scenePlanSpecificity}/100). Regenerate or edit captions with repo-specific nouns.
+          </div>
+        )}
+        {scenePlanError && (
+          <div className="bg-red-100 border border-red-300 text-red-700 px-3 py-2 rounded mb-3">
+            {scenePlanError}
+          </div>
+        )}
+        {scenePlan.length > 0 && (
+          <div>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {scenePlan.map((scene, idx) => (
+                <button
+                  key={scene.id || idx}
+                  type="button"
+                  onClick={() => setActiveSceneIdx(idx)}
+                  className={`px-3 py-1.5 rounded text-sm border ${activeSceneIdx === idx ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300'}`}
+                >
+                  {scene.beat}
+                </button>
+              ))}
+            </div>
+            {scenePlan[activeSceneIdx] && (
+              <div className="border border-gray-200 rounded-md p-4 bg-gray-50">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-gray-500 uppercase mb-1">{scenePlan[activeSceneIdx].beat}</p>
+                  <button
+                    type="button"
+                    className="text-xs text-blue-700 underline"
+                    onClick={() => toggleSceneCard(scenePlan[activeSceneIdx].id || activeSceneIdx)}
+                  >
+                    {expandedSceneIds[scenePlan[activeSceneIdx].id || activeSceneIdx] ? 'Collapse' : 'Expand'}
+                  </button>
+                </div>
+                <input className="w-full p-2 border border-gray-300 rounded-md text-sm mb-2" value={scenePlan[activeSceneIdx].title || ''} onChange={(e) => updateSceneField(activeSceneIdx, 'title', e.target.value)} />
+                <div className="text-xs text-gray-500 mb-2">Title words: {(scenePlan[activeSceneIdx].title || '').trim().split(/\s+/).filter(Boolean).length}/4</div>
+                <input className="w-full p-2 border border-gray-300 rounded-md text-sm mb-2" value={scenePlan[activeSceneIdx].subtitle || ''} onChange={(e) => updateSceneField(activeSceneIdx, 'subtitle', e.target.value)} />
+                <div className="text-xs text-gray-500 mb-2">Subtitle words: {(scenePlan[activeSceneIdx].subtitle || '').trim().split(/\s+/).filter(Boolean).length}/8</div>
+                <textarea
+                  className="w-full p-2 border border-gray-300 rounded-md text-sm mb-2"
+                  value={scenePlan[activeSceneIdx].caption || ''}
+                  onChange={(e) => updateSceneCaption(activeSceneIdx, e.target.value)}
+                />
+                <div className="text-xs text-gray-500 mb-2">Caption words: {(scenePlan[activeSceneIdx].caption || '').trim().split(/\s+/).filter(Boolean).length}/10</div>
+                {expandedSceneIds[scenePlan[activeSceneIdx].id || activeSceneIdx] && (
+                  <pre className="text-xs bg-white border border-gray-200 rounded p-2 overflow-auto">{scenePlan[activeSceneIdx].mermaid_diagram}</pre>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+      </div>
+
       {mp3Result && (
         <div className="mt-6 bg-green-100 border border-green-300 text-green-800 px-4 py-3 rounded">
           <p className="font-semibold mb-2">Media Outputs</p>
@@ -479,6 +678,16 @@ export default function EditorPage() {
           <p><strong>Video Job:</strong> {videoJob.job_id}</p>
           <p><strong>Status:</strong> {statusText[videoJob.status] || videoJob.status}</p>
           <p><strong>Message:</strong> {videoJob.message}</p>
+          <div className="my-2">
+            <div className="w-full bg-gray-200 rounded h-2">
+              <div className="bg-blue-600 h-2 rounded" style={{ width: `${Math.max(5, ((currentJobIndex + 1) / jobTimeline.length) * 100)}%` }} />
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {jobTimeline.map((st, i) => (
+                <span key={st} className={`text-xs px-2 py-1 rounded ${i <= currentJobIndex ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-500'}`}>{statusText[st] || st}</span>
+              ))}
+            </div>
+          </div>
           {videoJob.error && <p><strong>Error:</strong> {videoJob.error}</p>}
           {videoJob.result && (
             <div className="mt-2">
@@ -488,19 +697,26 @@ export default function EditorPage() {
               <p><strong>Video:</strong> {videoJob.result.video_file_name}</p>
               <p><strong>Video Local:</strong> {videoJob.result.video_local_path}</p>
               <p><strong>Video GCS:</strong> {videoJob.result.video_gcs_path}</p>
+              <p><strong>Duration:</strong> {durationSeconds}s</p>
+              <p><strong>File Size:</strong> {videoJob.result.video_file_size_bytes ? `${(videoJob.result.video_file_size_bytes / (1024 * 1024)).toFixed(2)} MB` : 'N/A'}</p>
+              {videoJob.result.video_local_path && (
+                <p><strong>Download MP4:</strong> <a className="text-blue-700 underline" href={videoJob.result.video_local_path} download>Download MP4</a></p>
+              )}
               {videoJob.result.sharepoint_status && (
                 <div className="mt-2 pt-2 border-t border-gray-200">
                   <p><strong>SharePoint Status:</strong> {videoJob.result.sharepoint_status}</p>
                   {videoJob.result.sharepoint_url && (
                     <p>
-                      <strong className="font-semibold">SharePoint Link:</strong>{' '}
-                      <a href={videoJob.result.sharepoint_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                      <a href={videoJob.result.sharepoint_url} target="_blank" rel="noopener noreferrer" className="inline-block bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-3 rounded">
                         Open in SharePoint
                       </a>
                     </p>
                   )}
                   {videoJob.result.sharepoint_error && (
-                    <p className="text-red-600"><strong>SharePoint Error:</strong> {videoJob.result.sharepoint_error}</p>
+                    <div>
+                      <p className="text-red-600"><strong>SharePoint Error:</strong> {videoJob.result.sharepoint_error}</p>
+                      <button onClick={handleGenerateVideo} className="mt-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold py-1 px-3 rounded">Retry Upload</button>
+                    </div>
                   )}
                 </div>
               )}

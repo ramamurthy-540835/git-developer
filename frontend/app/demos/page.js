@@ -10,24 +10,29 @@ export default function DemosPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredRepos, setFilteredRepos] = useState([]);
 
-  let resolvedApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || `http://${window.location.hostname}:8000`;
-  // Normalize the base URL: remove any trailing /api/v1 or / to ensure clean concatenation
-  resolvedApiBaseUrl = resolvedApiBaseUrl.replace(/\/api\/v1\/?$/, '').replace(/\/$/, '');
-  const API_BASE_URL = resolvedApiBaseUrl;
-  
-  console.log("API_BASE_URL (Demos Page):", API_BASE_URL);
+  const fallbackApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
+    ? process.env.NEXT_PUBLIC_API_BASE_URL.replace(/\/api\/v1\/?$/, "").replace(/\/$/, "")
+    : "";
 
   useEffect(() => {
     async function fetchRepos() {
-      const fetchUrl = `${API_BASE_URL}/api/repos`;
-      console.log("Repos API URL:", fetchUrl);
+      const primaryUrl = "/api/repos";
+      const fallbackUrl = fallbackApiBaseUrl ? `${fallbackApiBaseUrl}/api/repos` : null;
       try {
         setLoading(true);
         setError(null); // Clear previous errors
-        const response = await fetch(fetchUrl);
+        let response;
+        let lastUrl = primaryUrl;
+        try {
+          response = await fetch(primaryUrl);
+        } catch {
+          if (!fallbackUrl) throw new Error(`Failed to fetch ${primaryUrl}`);
+          lastUrl = fallbackUrl;
+          response = await fetch(fallbackUrl);
+        }
         if (!response.ok) {
           const errorDetail = await response.text();
-          throw new Error(`HTTP error! Status: ${response.status}. URL: ${fetchUrl}. Detail: ${errorDetail}`);
+          throw new Error(`HTTP error! Status: ${response.status}. URL: ${lastUrl}. Detail: ${errorDetail}`);
         }
         const data = await response.json();
         console.log("Repos API response:", data);
@@ -42,7 +47,7 @@ export default function DemosPage() {
       }
     }
     fetchRepos();
-  }, [API_BASE_URL]); // Add API_BASE_URL to dependency array
+  }, [fallbackApiBaseUrl]);
 
   useEffect(() => {
     const lowerCaseSearchTerm = searchTerm.toLowerCase();

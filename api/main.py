@@ -26,6 +26,7 @@ from agents.tts_agent import text_to_mp3
 from agents.gcs_agent import upload_to_gcs
 from agents.sharepoint_uploader import upload_to_sharepoint
 from agents.video_agent import mp3_to_video
+from agents.scene_planner import generate_scene_plan
 from google import genai
 from google.genai import types as genai_types
 
@@ -76,10 +77,27 @@ class VideoGenerateRequest(BaseModel):
     name: str
     transcript: str
     repo_context: Optional[Dict[str, Any]] = None
+    scene_plan: Optional[List[Dict[str, Any]]] = None
+    use_scene_plan: Optional[bool] = True
     renderer_mode: Optional[str] = "local_ffmpeg"
     video_prompt: Optional[str] = None
     duration_seconds: Optional[int] = 32
     upload_to_sharepoint: Optional[bool] = True # New field for controlling SharePoint upload
+
+class ScenePlanRequest(BaseModel):
+    repo_url: str
+    product_name: str
+    architecture_mmd: Optional[str] = None
+
+def _compact_prompt_from_scene_plan(scene_plan: List[Dict[str, Any]]) -> str:
+    chunks = []
+    for i, s in enumerate(scene_plan[:4], start=1):
+        beat = (s.get("beat") or f"scene_{i}").strip()
+        title = (s.get("title") or f"Scene {i}").strip()
+        caption = (s.get("caption") or "").strip()
+        diagram = (s.get("mermaid_diagram") or s.get("diagram") or "").strip().replace("\n", " ")
+        chunks.append(f"Scene {i} ({beat}): {title} - {caption}. [show Mermaid: {diagram}]")
+    return " ".join(chunks)
 
 VIDEO_JOBS: Dict[str, Dict[str, Any]] = {}
 
@@ -126,14 +144,10 @@ async def run_video_job(job_id: str, app_name: str, transcript: str, repo_contex
                         asyncio.to_thread(upload_to_sharepoint, mp4_path, app_name, description),
                         timeout=300
                     )
-                    if sharepoint_result and sharepoint_result.get("sharepoint_link"):
-                        sharepoint_url = sharepoint_result["sharepoint_link"]
-                        sharepoint_upload_status = "uploaded"
-                        logging.info(f"SharePoint: Upload completed successfully to {sharepoint_url}")
-                    else:
-                        sharepoint_upload_status = "failed"
-                        sharepoint_upload_error = "SharePoint upload succeeded but no link returned."
-                        logging.warning(f"SharePoint: Upload succeeded but no link returned for {os.path.basename(mp4_path)}.")
+                    sharepoint_url = (sharepoint_result or {}).get("sharepoint_link")
+                    sharepoint_upload_status = "uploaded"
+                    sharepoint_upload_error = None
+                    logging.info(f"SharePoint: Upload completed successfully to {sharepoint_url}")
                 except ValueError as e:
                     sharepoint_upload_status = "failed"
                     sharepoint_upload_error = str(e)
@@ -280,14 +294,10 @@ async def run_veo_job(job_id: str, app_name: str, video_prompt: str, duration_se
                         asyncio.to_thread(upload_to_sharepoint, str(output_mp4_path), app_name, description),
                         timeout=300
                     )
-                    if sharepoint_result and sharepoint_result.get("sharepoint_link"):
-                        sharepoint_url = sharepoint_result["sharepoint_link"]
-                        sharepoint_upload_status = "uploaded"
-                        logging.info(f"SharePoint: Upload completed successfully to {sharepoint_url} (Veo job).")
-                    else:
-                        sharepoint_upload_status = "failed"
-                        sharepoint_upload_error = "SharePoint upload succeeded but no link returned."
-                        logging.warning(f"SharePoint: Upload succeeded but no link returned for {output_mp4_path.name} (Veo job).")
+                    sharepoint_url = (sharepoint_result or {}).get("sharepoint_link")
+                    sharepoint_upload_status = "uploaded"
+                    sharepoint_upload_error = None
+                    logging.info(f"SharePoint: Upload completed successfully to {sharepoint_url} (Veo job).")
                 except ValueError as e:
                     sharepoint_upload_status = "failed"
                     sharepoint_upload_error = str(e)
@@ -388,6 +398,31 @@ async def get_repository_context_endpoint(request_body: RepoContextRequest):
         logging.error(f"Error fetching repository context for {repo_url}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Internal server error fetching repository context: {e}")
 
+
+@app.post("/api/scene-plan")
+async def post_scene_plan(request_body: ScenePlanRequest):
+    try:
+        plan = await asyncio.wait_for(
+            asyncio.to_thread(
+                generate_scene_plan,
+                request_body.repo_url,
+                request_body.product_name,
+                request_body.architecture_mmd,
+            ),
+            timeout=120,
+        )
+        scenes = plan.get("scenes", [])
+        return {
+            "success": True,
+            "scenes": scenes,
+            "specificity_score": plan.get("specificity_score", 0),
+            "scene_diagnostics": plan.get("scene_diagnostics", []),
+            "topics": plan.get("topics", {}),
+        }
+    except Exception as e:
+        logging.error(f"Scene plan generation failed: {e}", exc_info=True)
+        return {"success": False, "error": f"{e}"}
+
 @app.post("/api/transcript")
 async def post_transcript(request_body: TranscriptRequest):
     app_data = request_body.app.dict(exclude_unset=True) # Convert Pydantic model to dict, exclude optional fields not set
@@ -455,9 +490,24 @@ async def generate_video_endpoint(request_body: VideoGenerateRequest):
     app_name = request_body.name
     transcript = request_body.transcript
     repo_context = request_body.repo_context
+    scene_plan = request_body.scene_plan or []
+    use_scene_plan = request_body.use_scene_plan if request_body.use_scene_plan is not None else True
     renderer_mode = request_body.renderer_mode or "local_ffmpeg"
-    video_prompt = request_body.video_prompt or _default_video_prompt(app_name, transcript, repo_context)
     duration_seconds = max(8, min(60, int(request_body.duration_seconds or 32)))
+
+    if use_scene_plan:
+        if not scene_plan:
+            raise HTTPException(status_code=400, detail="Use Scene Plan enabled but no scene_plan provided.")
+        scene_captions = [str(s.get("caption", "")).strip() for s in scene_plan[:4]]
+        if any(not c for c in scene_captions):
+            raise HTTPException(status_code=400, detail="Each scene must include a non-empty caption.")
+        transcript = ". ".join(scene_captions)
+        video_prompt = _compact_prompt_from_scene_plan(scene_plan)
+        if isinstance(repo_context, dict):
+            repo_context = {**repo_context, "scene_plan": scene_plan}
+    else:
+        video_prompt = request_body.video_prompt or _default_video_prompt(app_name, transcript, repo_context)
+
     if not transcript or not transcript.strip():
         raise HTTPException(status_code=400, detail="Transcript is empty. Generate or enter transcript text first.")
 

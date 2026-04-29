@@ -39,12 +39,15 @@ def render_mermaid_video(plan: Dict[str, Any], product_name: str, output_mp4_pat
                 t = frame / fps
                 idx = min(len(scenes) - 1, int(t // scene_dur))
                 scene = scenes[idx]
+                scene_graph = scene.get("mermaid_diagram") or scene.get("diagram") or plan.get("mermaid_graph", "")
                 payload = {
                     "product": product_name,
                     "sceneIndex": idx,
                     "totalScenes": len(scenes),
-                    "caption": scene.get("caption", "")[:60],
-                    "mermaid_graph": plan["mermaid_graph"],
+                    "title": scene.get("header") or scene.get("title") or "",
+                    "subtitle": scene.get("subtitle") or "",
+                    "caption": scene.get("caption", "")[:120],
+                    "mermaid_graph": scene_graph,
                     "done": scene.get("node_state", {}).get("done", []),
                     "active": scene.get("node_state", {}).get("active", ""),
                 }
