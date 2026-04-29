@@ -1,9 +1,9 @@
 {
   "pages": {
-    "/demos/page": [
+    "/editor/[name]/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/demos/page.js"
+      "static/chunks/app/editor/[name]/page.js"
     ],
     "/layout": [
       "static/chunks/webpack.js",

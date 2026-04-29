@@ -2,8 +2,11 @@ import os
 import asyncio
 import logging
 import yaml
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 from typing import List, Dict, Any, Optional
+from uuid import uuid4
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,6 +24,9 @@ from agents.transcript_agent import generate_transcript
 from agents.github_reader_agent import get_repo_context # New import
 from agents.tts_agent import text_to_mp3
 from agents.gcs_agent import upload_to_gcs
+from agents.video_agent import mp3_to_video
+from google import genai
+from google.genai import types as genai_types
 
 
 # Initialize FastAPI app
@@ -32,13 +38,15 @@ class RepoContextRequest(BaseModel):
 
 # Add CORS middleware
 origins = [
-    "http://localhost:3000",
-    "http://10.100.15.44:3000", # As per user request
+    os.getenv("NEXT_PUBLIC_API_BASE_URL", "http://localhost:3000"),
+    os.getenv("NEXT_PUBLIC_API_URL", "http://localhost:3000"),
+    os.getenv("NEXT_PUBLIC_BACKEND_URL", "http://localhost:3000"),
+    # Add any other origins you need to allow
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"], # Allow all origins for development, refine in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -62,6 +70,174 @@ class TranscriptRequest(BaseModel):
 class Mp3GenerateRequest(BaseModel):
     name: str
     transcript: str
+
+class VideoGenerateRequest(BaseModel):
+    name: str
+    transcript: str
+    repo_context: Optional[Dict[str, Any]] = None
+    renderer_mode: Optional[str] = "local_ffmpeg"
+    video_prompt: Optional[str] = None
+    duration_seconds: Optional[int] = 32
+
+VIDEO_JOBS: Dict[str, Dict[str, Any]] = {}
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+def update_job(job_id: str, **kwargs):
+    if job_id in VIDEO_JOBS:
+        VIDEO_JOBS[job_id].update(kwargs)
+        VIDEO_JOBS[job_id]["updated_at"] = now_iso()
+
+async def run_video_job(job_id: str, app_name: str, transcript: str, repo_context: Optional[Dict[str, Any]] = None):
+    mp3_path = None
+    mp4_path = None
+    try:
+        update_job(job_id, status="generating_mp3", message="Generating narration audio")
+        mp3_name = f"{app_name.lower().replace(' ', '_').replace('-', '_')}_{uuid4().hex[:8]}.mp3"
+        mp3_path = await asyncio.wait_for(asyncio.to_thread(text_to_mp3, transcript, mp3_name), timeout=120)
+
+        update_job(job_id, status="uploading_mp3", message="Uploading MP3 to storage")
+        mp3_gcs = await asyncio.wait_for(asyncio.to_thread(upload_to_gcs, mp3_path), timeout=120)
+
+        update_job(job_id, status="rendering_video", message="Rendering MP4 from narration")
+        mp4_name = mp3_name.replace(".mp3", ".mp4")
+        mp4_path = await asyncio.wait_for(
+            asyncio.to_thread(mp3_to_video, mp3_path, mp4_name, app_name, transcript, repo_context),
+            timeout=180
+        )
+
+        update_job(job_id, status="uploading_video", message="Uploading MP4 to storage")
+        mp4_gcs = await asyncio.wait_for(asyncio.to_thread(upload_to_gcs, mp4_path), timeout=120)
+
+        update_job(
+            job_id,
+            status="completed",
+            message="Video generation completed",
+            result={
+                "mp3_file_name": os.path.basename(mp3_path),
+                "mp3_local_path": mp3_path,
+                "mp3_gcs_path": mp3_gcs,
+                "video_file_name": os.path.basename(mp4_path),
+                "video_local_path": mp4_path,
+                "video_gcs_path": mp4_gcs,
+            },
+            completed_at=now_iso(),
+        )
+    except asyncio.TimeoutError:
+        update_job(job_id, status="failed", message="Job timed out", error="Timeout during media generation/upload")
+    except Exception as e:
+        logging.error(f"Video job failed for {app_name}: {e}", exc_info=True)
+        update_job(job_id, status="failed", message="Job failed", error=str(e))
+    finally:
+        for local_path in [mp3_path, mp4_path]:
+            try:
+                if local_path and os.path.exists(local_path):
+                    os.remove(local_path)
+            except Exception:
+                pass
+
+def _default_video_prompt(name: str, transcript: str, repo_context: Optional[Dict[str, Any]]) -> str:
+    desc = (repo_context or {}).get("description") or ""
+    tech = ", ".join((repo_context or {}).get("tech_stack") or [])
+    return (
+        f"Create a cinematic product demo for {name}. "
+        f"Show real workflow, UI actions, and business impact. "
+        f"Context: {desc}. Tech cues: {tech}. "
+        f"Narration basis: {transcript[:1200]}"
+    )
+
+async def run_veo_job(job_id: str, app_name: str, video_prompt: str, duration_seconds: int, transcript: str, repo_context: Optional[Dict[str, Any]] = None):
+    output_mp4_path = None
+    try:
+        update_job(job_id, status="rendering_video", message="Generating video with Veo Lite")
+        client = genai.Client(vertexai=True, project="ctoteam", location="us-central1")
+        source = genai_types.GenerateVideosSource(prompt=video_prompt)
+        config = genai_types.GenerateVideosConfig(
+            aspect_ratio="16:9",
+            number_of_videos=1,
+            duration_seconds=duration_seconds,
+            person_generation="allow_all",
+            generate_audio=True,
+            resolution="720p",
+            seed=0,
+        )
+        operation = client.models.generate_videos(
+            model="veo-3.1-lite-generate-001", source=source, config=config
+        )
+        while not operation.done:
+            await asyncio.sleep(5)
+            operation = client.operations.get(operation)
+
+        response = operation.result
+        generated = (response.generated_videos if response else None) or []
+        if not generated or not generated[0].video:
+            logging.error(
+                "Veo returned no videos. op_done=%s op_name=%s response_type=%s",
+                getattr(operation, "done", None),
+                getattr(operation, "name", None),
+                type(response).__name__ if response else None,
+            )
+            update_job(
+                job_id,
+                status="fallback_local",
+                message="Veo returned no video; falling back to local FFmpeg renderer",
+            )
+            mp3_name = f"{app_name.lower().replace(' ', '_').replace('-', '_')}_{uuid4().hex[:8]}.mp3"
+            mp3_path = await asyncio.wait_for(asyncio.to_thread(text_to_mp3, transcript, mp3_name), timeout=120)
+            mp4_name = mp3_name.replace(".mp3", ".mp4")
+            mp4_path = await asyncio.wait_for(
+                asyncio.to_thread(mp3_to_video, mp3_path, mp4_name, app_name, transcript, repo_context),
+                timeout=180,
+            )
+            mp3_gcs = await asyncio.wait_for(asyncio.to_thread(upload_to_gcs, mp3_path), timeout=120)
+            mp4_gcs = await asyncio.wait_for(asyncio.to_thread(upload_to_gcs, mp4_path), timeout=120)
+            update_job(
+                job_id,
+                status="completed",
+                message="Veo returned no video; completed with local FFmpeg fallback",
+                result={
+                    "renderer_mode": "local_ffmpeg_fallback",
+                    "video_prompt": video_prompt,
+                    "estimated_cost_usd": round(duration_seconds * 0.05, 4),
+                    "mp3_file_name": os.path.basename(mp3_path),
+                    "mp3_local_path": str(mp3_path),
+                    "mp3_gcs_path": mp3_gcs,
+                    "video_file_name": os.path.basename(mp4_path),
+                    "video_local_path": str(mp4_path),
+                    "video_gcs_path": mp4_gcs,
+                    "veo_operation_name": getattr(operation, "name", None),
+                },
+                completed_at=now_iso(),
+            )
+            return
+
+        update_job(job_id, status="saving_video", message="Saving Veo output locally")
+        output_dir = Path("output")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_mp4_path = output_dir / f"{app_name.lower().replace(' ', '_')}_{uuid4().hex[:8]}_veo.mp4"
+        generated[0].video.save(str(output_mp4_path))
+
+        update_job(job_id, status="uploading_video", message="Uploading MP4 to storage")
+        mp4_gcs = await asyncio.wait_for(asyncio.to_thread(upload_to_gcs, str(output_mp4_path)), timeout=180)
+        update_job(
+            job_id,
+            status="completed",
+            message="Video generation completed",
+            result={
+                "renderer_mode": "veo_lite",
+                "video_prompt": video_prompt,
+                "estimated_cost_usd": round(duration_seconds * 0.05, 4),
+                "duration_seconds": duration_seconds,
+                "video_file_name": output_mp4_path.name,
+                "video_local_path": str(output_mp4_path),
+                "video_gcs_path": mp4_gcs,
+            },
+            completed_at=now_iso(),
+        )
+    except Exception as e:
+        logging.error(f"Veo job failed for {app_name}: {e}", exc_info=True)
+        update_job(job_id, status="failed", message="Job failed", error=str(e))
 
 # Endpoints
 @app.get("/health")
@@ -153,15 +329,24 @@ async def generate_mp3_endpoint(request_body: Mp3GenerateRequest):
     logging.info(f"Received request to generate MP3 for app: {app_name}")
 
     try:
+        logging.info(f"MP3 step: validate transcript for {app_name}")
+        if not transcript or not transcript.strip():
+            raise HTTPException(status_code=400, detail="Transcript is empty. Generate or enter transcript text first.")
+
         # Generate a unique base filename for the MP3
         filename_base = f"{app_name.lower().replace(' ', '_').replace('-', '_')}_{os.urandom(4).hex()}.mp3"
-        
-        # Call TTS agent. text_to_mp3 saves to its internal 'output' directory.
-        # It returns the full path where it saved the file.
-        full_local_mp3_path = text_to_mp3(transcript, filename_base)
-        
-        # Upload to GCS
-        gcs_path = upload_to_gcs(full_local_mp3_path)
+
+        # Run network-bound calls in worker threads with explicit timeouts.
+        logging.info(f"MP3 step: tts start for {app_name}")
+        full_local_mp3_path = await asyncio.wait_for(
+            asyncio.to_thread(text_to_mp3, transcript, filename_base),
+            timeout=120
+        )
+        logging.info(f"MP3 step: upload start for {app_name}")
+        gcs_path = await asyncio.wait_for(
+            asyncio.to_thread(upload_to_gcs, full_local_mp3_path),
+            timeout=120
+        )
 
         # Clean up local file
         os.remove(full_local_mp3_path)
@@ -169,13 +354,51 @@ async def generate_mp3_endpoint(request_body: Mp3GenerateRequest):
 
         return {
             "local_file_name": filename_base, # Return just the name for simplicity
+            "local_path": full_local_mp3_path,
             "gcs_path": gcs_path
         }
+    except asyncio.TimeoutError:
+        logging.error(f"Timeout generating or uploading MP3 for app {app_name}", exc_info=True)
+        raise HTTPException(status_code=504, detail="MP3 generation timed out. Please retry.")
     except Exception as e:
         logging.error(f"Error generating or uploading MP3 for app {app_name}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Internal server error during MP3 generation: {e}")
 
 @app.post("/api/generate-video")
-async def generate_video_endpoint():
-    logging.info("Received request for video generation (not yet implemented).")
-    return {"status": "not_implemented", "message": "Video generation will be added after MP3 flow works"}
+async def generate_video_endpoint(request_body: VideoGenerateRequest):
+    app_name = request_body.name
+    transcript = request_body.transcript
+    repo_context = request_body.repo_context
+    renderer_mode = request_body.renderer_mode or "local_ffmpeg"
+    video_prompt = request_body.video_prompt or _default_video_prompt(app_name, transcript, repo_context)
+    duration_seconds = max(8, min(60, int(request_body.duration_seconds or 32)))
+    if not transcript or not transcript.strip():
+        raise HTTPException(status_code=400, detail="Transcript is empty. Generate or enter transcript text first.")
+
+    job_id = uuid4().hex
+    VIDEO_JOBS[job_id] = {
+        "job_id": job_id,
+        "name": app_name,
+        "status": "queued",
+        "message": "Job accepted",
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+        "result": None,
+        "error": None,
+        "renderer_mode": renderer_mode,
+        "video_prompt": video_prompt,
+        "estimated_cost_usd": round(duration_seconds * 0.05, 4) if renderer_mode == "veo_lite" else 0.0,
+        "duration_seconds": duration_seconds,
+    }
+    if renderer_mode == "veo_lite":
+        asyncio.create_task(run_veo_job(job_id, app_name, video_prompt, duration_seconds, transcript, repo_context))
+    else:
+        asyncio.create_task(run_video_job(job_id, app_name, transcript, repo_context))
+    return {"job_id": job_id, "status": "queued"}
+
+@app.get("/api/jobs/{job_id}")
+async def get_job_status(job_id: str):
+    job = VIDEO_JOBS.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job

@@ -21,7 +21,7 @@ async def generate_transcript(app: Dict[str, Any]) -> tuple[str, Dict[str, Any],
     app_name = app.get("name", "Unknown Application").replace('_', ' ').title()
     app_full_name = app.get("full_name", app_name)
     app_description = app.get("description", "No description provided.")
-    app_title = app.get("title", app_name)
+    app_title = app.get("title") or app_description or app_name
     app_tags = app.get("tags", [])
     
     source_context: Dict[str, Any] = {
@@ -95,10 +95,13 @@ async def generate_transcript(app: Dict[str, Any]) -> tuple[str, Dict[str, Any],
                        "Do NOT use any markdown formatting (e.g., bolding, italics, headings) or bullet points. " \
                        "Focus entirely on explaining the application's features, benefits, and value proposition as if you are narrating a live demonstration. " \
                        "Crucially, DO NOT mention any technical issues, URL access problems, or script-writing instructions within the narration itself. " \
+                       "Use natural spoken phrasing optimized for TTS: short to medium sentences, clear transitions, and pronounceable wording. " \
+                       "Preserve product naming exactly from provided title/description; do NOT merge words, invent casing, or alter brand names. " \
                        "Output ONLY the final voiceover narration."
     prompt_parts.append(base_instruction)
 
     prompt_parts.append(f"\n\nApplication being demonstrated: {app_title}")
+    prompt_parts.append(f"Canonical product name for narration: {app_title}")
     prompt_parts.append(f"Primary purpose: {app_description}")
     if app_tags:
         prompt_parts.append(f"Key themes/tags: {', '.join(app_tags)}")

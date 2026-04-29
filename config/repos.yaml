@@ -1,15 +1,108 @@
 repos:
+- name: media_agent
+  full_name: ramamurthy-540835/media_agent
+  repo_url: https://github.com/ramamurthy-540835/media_agent
+  description: Media Agent
+  private: true
+  updated_at: '2026-04-28T16:04:53Z'
+  language: Python
+- name: upgraded-computing-machine
+  full_name: ramamurthy-540835/upgraded-computing-machine
+  repo_url: https://github.com/ramamurthy-540835/upgraded-computing-machine
+  description: Upgraded Computing Machine
+  private: false
+  updated_at: '2026-04-28T15:56:39Z'
+  language: HTML
+- name: ai_sql
+  full_name: ramamurthy-540835/ai_sql
+  repo_url: https://github.com/ramamurthy-540835/ai_sql
+  description: Advanced system for converting English data quality rules into validated
+    SQL using LangGraph, Chroma, and Neo4j
+  private: false
+  updated_at: '2026-04-28T15:55:42Z'
+  language: HTML
+- name: cement-ai
+  full_name: ramamurthy-540835/cement-ai
+  repo_url: https://github.com/ramamurthy-540835/cement-ai
+  description: CementAI — GenAI Optimization for Cement Industry
+  private: false
+  updated_at: '2026-04-28T15:53:04Z'
+  language: Python
+- name: chennai-google
+  full_name: ramamurthy-540835/chennai-google
+  repo_url: https://github.com/ramamurthy-540835/chennai-google
+  description: Chennai Google
+  private: false
+  updated_at: '2026-04-28T15:51:32Z'
+  language: HTML
+- name: ai-agent
+  full_name: ramamurthy-540835/ai-agent
+  repo_url: https://github.com/ramamurthy-540835/ai-agent
+  description: agent-assist-pro
+  private: false
+  updated_at: '2026-04-28T15:49:36Z'
+  language: JavaScript
+- name: MeterReaderProExpo
+  full_name: ramamurthy-540835/MeterReaderProExpo
+  repo_url: https://github.com/ramamurthy-540835/MeterReaderProExpo
+  description: Electricity Meter Reader Pro Expo
+  private: false
+  updated_at: '2026-04-28T15:42:05Z'
+  language: JavaScript
+- name: talentedge
+  full_name: ramamurthy-540835/talentedge
+  repo_url: https://github.com/ramamurthy-540835/talentedge
+  description: Talentedge
+  private: true
+  updated_at: '2026-04-28T15:28:21Z'
+  language: TypeScript
+- name: costco-analytics
+  full_name: ramamurthy-540835/costco-analytics
+  repo_url: https://github.com/ramamurthy-540835/costco-analytics
+  description: Costco Analytics
+  private: false
+  updated_at: '2026-04-28T15:25:37Z'
+  language: Python
+- name: chatbot
+  full_name: ramamurthy-540835/chatbot
+  repo_url: https://github.com/ramamurthy-540835/chatbot
+  description: costco-chatbot
+  private: true
+  updated_at: '2026-04-28T15:23:45Z'
+  language: JavaScript
+- name: agent-orchestrator
+  full_name: ramamurthy-540835/agent-orchestrator
+  repo_url: https://github.com/ramamurthy-540835/agent-orchestrator
+  description: Agent Orchestrator
+  private: false
+  updated_at: '2026-04-28T15:17:52Z'
+  language: Python
+- name: w3os
+  full_name: ramamurthy-540835/w3os
+  repo_url: https://github.com/ramamurthy-540835/w3os
+  description: '- Comprehensive framework designed to simplify decentralized application
+    (dApp) development.'
+  private: false
+  updated_at: '2026-04-28T15:11:49Z'
+  language: TypeScript
+- name: costco-agent-assist
+  full_name: ramamurthy-540835/costco-agent-assist
+  repo_url: https://github.com/ramamurthy-540835/costco-agent-assist
+  description: Costco Agent Assist
+  private: false
+  updated_at: '2026-04-28T11:03:12Z'
+  language: JavaScript
 - name: bigquery-interactive-demos
   full_name: ramamurthy-540835/bigquery-interactive-demos
   repo_url: https://github.com/ramamurthy-540835/bigquery-interactive-demos
-  description: ''
+  description: Bigquery Interactive Demos
   private: true
-  updated_at: '2026-04-28T10:01:45Z'
+  updated_at: '2026-04-28T10:08:50Z'
   language: HTML
 - name: healthcare-vbc-pa
   full_name: ramamurthy-540835/healthcare-vbc-pa
   repo_url: https://github.com/ramamurthy-540835/healthcare-vbc-pa
-  description: ''
+  description: Healthcare Vbc Pa
   private: true
   updated_at: '2026-04-28T09:21:29Z'
   language: TypeScript
@@ -30,24 +123,17 @@ repos:
   private: false
   updated_at: '2026-04-28T09:02:53Z'
   language: Python
-- name: w3os
-  full_name: ramamurthy-540835/w3os
-  repo_url: https://github.com/ramamurthy-540835/w3os
-  description: ''
-  private: false
-  updated_at: '2026-04-28T08:42:55Z'
-  language: TypeScript
 - name: weathernext
   full_name: ramamurthy-540835/weathernext
   repo_url: https://github.com/ramamurthy-540835/weathernext
-  description: ''
+  description: Weathernext
   private: false
   updated_at: '2026-04-28T08:40:44Z'
   language: TypeScript
 - name: prompt_craft2.0
   full_name: ramamurthy-540835/prompt_craft2.0
   repo_url: https://github.com/ramamurthy-540835/prompt_craft2.0
-  description: ''
+  description: Prompt Craft2.0
   private: false
   updated_at: '2026-04-28T08:09:03Z'
   language: TypeScript
@@ -89,7 +175,7 @@ repos:
 - name: mhh-adept-solution-prior-authorization
   full_name: mitaei/mhh-adept-solution-prior-authorization
   repo_url: https://github.com/mitaei/mhh-adept-solution-prior-authorization
-  description: ''
+  description: <div align="center">
   private: true
   updated_at: '2026-04-09T09:55:28Z'
   language: JavaScript
@@ -121,13 +207,6 @@ repos:
   private: false
   updated_at: '2026-04-06T07:17:14Z'
   language: ''
-- name: agent-orchestrator
-  full_name: ramamurthy-540835/agent-orchestrator
-  repo_url: https://github.com/ramamurthy-540835/agent-orchestrator
-  description: ''
-  private: false
-  updated_at: '2026-02-25T17:58:07Z'
-  language: Python
 - name: w3
   full_name: ramamurthy-540835/w3
   repo_url: https://github.com/ramamurthy-540835/w3
@@ -166,17 +245,10 @@ repos:
 - name: jhp-adept
   full_name: ramamurthy-540835/jhp-adept
   repo_url: https://github.com/ramamurthy-540835/jhp-adept
-  description: ''
+  description: JHP Code Conversion ADEPT
   private: false
   updated_at: '2026-01-02T03:50:08Z'
   language: TypeScript
-- name: costco-analytics
-  full_name: ramamurthy-540835/costco-analytics
-  repo_url: https://github.com/ramamurthy-540835/costco-analytics
-  description: ''
-  private: false
-  updated_at: '2025-12-12T05:12:33Z'
-  language: Python
 - name: csat
   full_name: ramamurthy-540835/csat
   repo_url: https://github.com/ramamurthy-540835/csat
@@ -187,52 +259,31 @@ repos:
 - name: sokosumi-agents
   full_name: ramamurthy-540835/sokosumi-agents
   repo_url: https://github.com/ramamurthy-540835/sokosumi-agents
-  description: ''
+  description: Cardano Life Agents v2.0
   private: false
   updated_at: '2025-11-30T01:16:48Z'
   language: TypeScript
 - name: cardano-life-agents-v31
   full_name: ramamurthy-540835/cardano-life-agents-v31
   repo_url: https://github.com/ramamurthy-540835/cardano-life-agents-v31
-  description: ''
+  description: '"# cardano-life-agents-v31"'
   private: false
   updated_at: '2025-11-29T11:20:45Z'
   language: TypeScript
 - name: cardano-life-agents-v2
   full_name: ramamurthy-540835/cardano-life-agents-v2
   repo_url: https://github.com/ramamurthy-540835/cardano-life-agents-v2
-  description: ''
+  description: Cardano Life Agents v2.0
   private: true
   updated_at: '2025-11-29T11:17:04Z'
   language: TypeScript
 - name: cardano-life-agents
   full_name: ramamurthy-540835/cardano-life-agents
   repo_url: https://github.com/ramamurthy-540835/cardano-life-agents
-  description: ''
+  description: Cardano Life Agents
   private: true
   updated_at: '2025-11-26T04:06:14Z'
   language: TypeScript
-- name: talentedge
-  full_name: ramamurthy-540835/talentedge
-  repo_url: https://github.com/ramamurthy-540835/talentedge
-  description: ''
-  private: true
-  updated_at: '2025-11-25T16:33:17Z'
-  language: TypeScript
-- name: MeterReaderProExpo
-  full_name: ramamurthy-540835/MeterReaderProExpo
-  repo_url: https://github.com/ramamurthy-540835/MeterReaderProExpo
-  description: Electricity Meter Reader Pro Expo
-  private: false
-  updated_at: '2025-11-15T08:27:37Z'
-  language: JavaScript
-- name: costco-agent-assist
-  full_name: ramamurthy-540835/costco-agent-assist
-  repo_url: https://github.com/ramamurthy-540835/costco-agent-assist
-  description: ''
-  private: false
-  updated_at: '2025-11-14T04:42:38Z'
-  language: JavaScript
 - name: Splunk_GCP
   full_name: mitchatboat/Splunk_GCP
   repo_url: https://github.com/mitchatboat/Splunk_GCP
@@ -255,46 +306,3 @@ repos:
   private: false
   updated_at: '2025-11-02T15:09:34Z'
   language: TypeScript
-- name: cement-ai
-  full_name: ramamurthy-540835/cement-ai
-  repo_url: https://github.com/ramamurthy-540835/cement-ai
-  description: CementAI — GenAI Optimization for Cement Industry
-  private: false
-  updated_at: '2025-10-28T14:01:51Z'
-  language: Python
-- name: ai-agent
-  full_name: ramamurthy-540835/ai-agent
-  repo_url: https://github.com/ramamurthy-540835/ai-agent
-  description: agent-assist-pro
-  private: false
-  updated_at: '2025-10-25T05:49:46Z'
-  language: JavaScript
-- name: chennai-google
-  full_name: ramamurthy-540835/chennai-google
-  repo_url: https://github.com/ramamurthy-540835/chennai-google
-  description: ''
-  private: false
-  updated_at: '2025-10-04T08:45:52Z'
-  language: HTML
-- name: chatbot
-  full_name: ramamurthy-540835/chatbot
-  repo_url: https://github.com/ramamurthy-540835/chatbot
-  description: costco-chatbot
-  private: true
-  updated_at: '2025-09-06T02:32:56Z'
-  language: JavaScript
-- name: ai_sql
-  full_name: ramamurthy-540835/ai_sql
-  repo_url: https://github.com/ramamurthy-540835/ai_sql
-  description: Advanced system for converting English data quality rules into validated
-    SQL using LangGraph, Chroma, and Neo4j
-  private: false
-  updated_at: '2025-06-21T04:07:24Z'
-  language: ''
-- name: upgraded-computing-machine
-  full_name: ramamurthy-540835/upgraded-computing-machine
-  repo_url: https://github.com/ramamurthy-540835/upgraded-computing-machine
-  description: ''
-  private: false
-  updated_at: '2025-06-17T16:43:59Z'
-  language: ''

@@ -25,6 +25,7 @@ env/
 
 # Node (future Next.js)
 node_modules/
+frontend/.next/
 
 # Output files
 output/
@@ -36,3 +37,10 @@ venv/
 generated_readmes/
 output/
 tmp/
+
+# Build/install artifacts
+*.msi
+*.zip
+*.mp3
+*.mp4
+*.srt

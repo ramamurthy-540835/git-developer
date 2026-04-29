@@ -7,7 +7,8 @@ import Link from 'next/link';
 export default function EditorPage() {
   const params = useParams();
   const searchParams = useSearchParams(); // Get search params
-  const fullRepoName = params.name; // This will be owner/repo
+  const rawNameParam = Array.isArray(params.name) ? params.name[0] : params.name;
+  const fullRepoName = rawNameParam ? decodeURIComponent(rawNameParam) : ""; // owner/repo
   const repoUrl = searchParams.get('repo_url'); // Get repo_url from query params
 
   const [repoMetadata, setRepoMetadata] = useState(null);
@@ -18,8 +19,27 @@ export default function EditorPage() {
   const [error, setError] = useState(null);
   const [loadingRepoContext, setLoadingRepoContext] = useState(false);
   const [loadingTranscript, setLoadingTranscript] = useState(false);
+  const [loadingMp3, setLoadingMp3] = useState(false);
+  const [mp3Result, setMp3Result] = useState(null);
+  const [mp3Status, setMp3Status] = useState('');
+  const [videoJobId, setVideoJobId] = useState(null);
+  const [videoJob, setVideoJob] = useState(null);
+  const [loadingVideo, setLoadingVideo] = useState(false);
+  const [rendererMode, setRendererMode] = useState('local_ffmpeg');
+  const [videoPrompt, setVideoPrompt] = useState('');
+  const [durationSeconds, setDurationSeconds] = useState(32);
+  const [autoPromptMode, setAutoPromptMode] = useState(true);
+  const statusText = {
+    queued: 'Queued',
+    generating_mp3: 'Generating audio',
+    uploading_mp3: 'Uploading audio',
+    rendering_video: 'Rendering video',
+    uploading_video: 'Uploading video',
+    completed: 'Completed',
+    failed: 'Failed',
+  };
 
-  const API_BASE_URL = 'http://10.100.15.44:8000'; // Define API base URL
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
 
   // Function to fetch repository metadata from config/repos.yaml
   const fetchRepoMetadata = useCallback(async () => {
@@ -112,7 +132,6 @@ export default function EditorPage() {
 
       const transcriptData = await response.json();
       setTranscript(transcriptData.transcript);
-      setSourceContext(transcriptData.source_context); // Update main sourceContext
       if (transcriptData.warning) {
         setError(transcriptData.warning);
       }
@@ -130,6 +149,29 @@ export default function EditorPage() {
     fetchRepoMetadata();
   }, [fetchRepoMetadata]);
 
+  useEffect(() => {
+    if (!autoPromptMode) return;
+    const repoName = repoMetadata?.name || fullRepoName || 'this product';
+    const desc = repoMetadata?.description || repoContext?.description || '';
+    let flowHint = 'Show realistic workflow, key interactions, and business value.';
+    if (durationSeconds <= 12) {
+      flowHint = 'Focus on a fast hook and one core workflow moment with strong visual clarity.';
+    } else if (durationSeconds <= 24) {
+      flowHint = 'Cover hook, workflow demo, and business impact in a concise narrative.';
+    } else if (durationSeconds <= 32) {
+      flowHint = 'Use a 4-beat flow: problem, interaction workflow, AI insight, business outcome.';
+    } else {
+      flowHint = 'Use a full narrative flow with clear transitions across product value, workflow, AI insight, architecture, and outcomes.';
+    }
+    const autoPrompt = `Create a cinematic ${durationSeconds}-second product demo video for ${repoName}. `
+      + `${flowHint} `
+      + `Style: modern enterprise SaaS demo, smooth camera motion, readable UI overlays, clean composition. `
+      + `Avoid clutter, generic stock scenes, and unreadable on-screen text. `
+      + `Context: ${desc}. `
+      + `Narration basis: ${transcript?.slice(0, 1000) || ''}`;
+    setVideoPrompt(autoPrompt);
+  }, [autoPromptMode, repoMetadata?.name, repoMetadata?.description, repoContext?.description, fullRepoName, durationSeconds, transcript]);
+
   // If repo metadata is loaded and repoUrl is available, attempt to read context automatically
   // useEffect(() => {
   //   if (repoMetadata && repoUrl && !repoContext && !loadingRepoContext) {
@@ -139,8 +181,15 @@ export default function EditorPage() {
 
 
   const handleGenerateMp3 = async () => {
-    alert('Generating MP3...'); // User feedback
+    if (!transcript || !transcript.trim()) {
+      setError("Transcript is empty. Generate transcript first.");
+      return;
+    }
     try {
+      setLoadingMp3(true);
+      setError(null);
+      setMp3Result(null);
+      setMp3Status('Submitting MP3 request...');
       // Assuming 'transcript' state holds the current editable content
       const response = await fetch(`${API_BASE_URL}/api/generate-mp3`, {
         method: 'POST',
@@ -155,19 +204,76 @@ export default function EditorPage() {
         throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
       }
 
+      setMp3Status('MP3 generated. Upload complete.');
       const mp3Data = await response.json();
-      alert(`MP3 Generated!\nFilename: ${mp3Data.local_file_name}\nGCS Path: ${mp3Data.gcs_path}`);
+      setMp3Result(mp3Data);
       console.log('MP3 generation successful:', mp3Data);
     } catch (e) {
-      alert(`Error generating MP3: ${e.message}`);
+      setError(`Error generating MP3: ${e.message}`);
+      setMp3Status('MP3 generation failed.');
       console.error('Error generating MP3:', e);
+    } finally {
+      setLoadingMp3(false);
     }
   };
 
-  const handleGenerateVideo = () => {
-    alert('Generate Video clicked!');
-    // In a real app, this would trigger a backend call to generate Video
+  const handleGenerateVideo = async () => {
+    if (!transcript || !transcript.trim()) {
+      setError("Transcript is empty. Generate transcript first.");
+      return;
+    }
+    try {
+      setLoadingVideo(true);
+      setError(null);
+      setVideoJob(null);
+      setVideoJobId(null);
+      const response = await fetch(`${API_BASE_URL}/api/generate-video`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: repoMetadata?.name || fullRepoName,
+          transcript: transcript,
+          repo_context: repoContext || {},
+          renderer_mode: rendererMode,
+          video_prompt: videoPrompt,
+          duration_seconds: durationSeconds,
+        }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      setVideoJobId(data.job_id);
+    } catch (e) {
+      setError(`Error generating video: ${e.message}`);
+    } finally {
+      setLoadingVideo(false);
+    }
   };
+
+  useEffect(() => {
+    if (!videoJobId) return;
+    let active = true;
+    const poll = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/jobs/${videoJobId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!active) return;
+        setVideoJob(data);
+        if (data.status !== 'completed' && data.status !== 'failed') {
+          setTimeout(poll, 2000);
+        }
+      } catch (e) {
+        if (active) setTimeout(poll, 3000);
+      }
+    };
+    poll();
+    return () => {
+      active = false;
+    };
+  }, [videoJobId, API_BASE_URL]);
 
   // Helper to render lists of strings
   const renderList = (items, label) => (
@@ -291,17 +397,90 @@ export default function EditorPage() {
       <div className="flex flex-wrap gap-4">
         <button
           onClick={handleGenerateMp3}
+          disabled={loadingMp3}
           className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded transition duration-150 ease-in-out"
         >
-          Generate MP3
+          {loadingMp3 ? 'Generating MP3...' : 'Generate MP3'}
         </button>
         <button
           onClick={handleGenerateVideo}
+          disabled={loadingVideo || (videoJob && (videoJob.status !== 'completed' && videoJob.status !== 'failed'))}
           className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition duration-150 ease-in-out"
         >
-          Generate Video
+          {loadingVideo ? 'Submitting Video Job...' : 'Generate Video'}
         </button>
       </div>
+      <div className="mt-6 bg-white rounded-lg shadow-md p-6 border border-gray-200">
+        <h3 className="text-xl font-semibold mb-3 text-gray-800">Video Renderer</h3>
+        <div className="flex gap-6 mb-4">
+          <label className="flex items-center gap-2">
+            <input type="radio" checked={rendererMode === 'local_ffmpeg'} onChange={() => setRendererMode('local_ffmpeg')} />
+            <span>Playwright + FFmpeg (Free)</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="radio" checked={rendererMode === 'veo_lite'} onChange={() => setRendererMode('veo_lite')} />
+            <span>Google Veo Lite (Paid)</span>
+          </label>
+        </div>
+        <div className="flex items-center gap-4 mb-3">
+          <label className="text-sm font-medium text-gray-700">Duration (seconds)</label>
+          <input
+            type="number"
+            min={8}
+            max={60}
+            value={durationSeconds}
+            onChange={(e) => setDurationSeconds(Math.max(8, Math.min(60, Number(e.target.value || 32))))}
+            className="w-24 p-2 border border-gray-300 rounded-md"
+          />
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={autoPromptMode} onChange={(e) => setAutoPromptMode(e.target.checked)} />
+            <span>Auto prompt</span>
+          </label>
+        </div>
+        <p className="text-sm text-gray-600 mb-2">Estimated Cost: ${rendererMode === 'veo_lite' ? (durationSeconds * 0.05).toFixed(2) : '0.00'}</p>
+        {rendererMode === 'veo_lite' && (
+          <p className="text-sm text-red-600 mb-3">Veo generation is chargeable. Use local mode for testing.</p>
+        )}
+        <label className="block text-md font-medium text-gray-700 mb-2">Editable Video Prompt</label>
+        <textarea
+          className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-40 text-gray-800"
+          value={videoPrompt}
+          onChange={(e) => setVideoPrompt(e.target.value)}
+        />
+      </div>
+      {mp3Result && (
+        <div className="mt-6 bg-green-100 border border-green-300 text-green-800 px-4 py-3 rounded">
+          <p className="font-semibold mb-2">Media Outputs</p>
+          <p><strong>Status:</strong> {mp3Status || 'Completed'}</p>
+          <p><strong>MP3 generated:</strong> {mp3Result.local_file_name}</p>
+          <p><strong>MP3 local path:</strong> {mp3Result.local_path}</p>
+          <p><strong>GCS path:</strong> {mp3Result.gcs_path}</p>
+        </div>
+      )}
+      {loadingMp3 && (
+        <div className="mt-4 bg-blue-100 border border-blue-300 text-blue-900 px-4 py-3 rounded">
+          <p><strong>MP3 Status:</strong> {mp3Status || 'Processing...'}</p>
+        </div>
+      )}
+      {videoJob && (
+        <div className="mt-4 bg-blue-100 border border-blue-300 text-blue-900 px-4 py-3 rounded">
+          <p className="font-semibold mb-2">Video Job Progress</p>
+          <p><strong>Video Job:</strong> {videoJob.job_id}</p>
+          <p><strong>Status:</strong> {statusText[videoJob.status] || videoJob.status}</p>
+          <p><strong>Message:</strong> {videoJob.message}</p>
+          {videoJob.error && <p><strong>Error:</strong> {videoJob.error}</p>}
+          {videoJob.result && (
+            <div className="mt-2">
+              <p><strong>MP3:</strong> {videoJob.result.mp3_file_name}</p>
+              <p><strong>MP3 Local:</strong> {videoJob.result.mp3_local_path}</p>
+              <p><strong>MP3 GCS:</strong> {videoJob.result.mp3_gcs_path}</p>
+              <p><strong>Video:</strong> {videoJob.result.video_file_name}</p>
+              <p><strong>Video Local:</strong> {videoJob.result.video_local_path}</p>
+              <p><strong>Video GCS:</strong> {videoJob.result.video_gcs_path}</p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
