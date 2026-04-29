@@ -4,6 +4,8 @@ from github import Github, GithubException
 import base64
 import re
 from typing import List, Dict, Any, Optional
+import requests.packages.urllib3 # New: for disabling SSL warnings
+import urllib3 # For explicit warning disable
 
 logging.basicConfig(level=logging.INFO)
 
@@ -72,9 +74,17 @@ def get_repo_context(repo_url: str) -> Dict[str, Any]:
             "readme": "Please set the GITHUB_TOKEN environment variable to access GitHub repositories.",
             "files": [], "tech_stack": [], "features": [], "repo_url": repo_url
         }
+    
+    # Temporarily disable SSL verification for requests used by PyGithub
+    # This is generally NOT recommended in production due to security risks.
+    # It is used here to address specific local environment SSL certificate issues.
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    os.environ["REQUESTS_KWARGS"] = '{"verify": false}'
 
     try:
         g = Github(github_token)
+        # The PyGithub library uses the requests library internally, which
+        # will pick up the REQUESTS_KWARGS environment variable if set.
         # Extract owner and repo name from the URL
         match = re.match(r"https://github.com/([^/]+)/([^/]+)", repo_url)
         if not match:

@@ -10,7 +10,7 @@ export default function DemosPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredRepos, setFilteredRepos] = useState([]);
 
-  const API_BASE_URL = 'http://10.100.15.44:8000'; // Define API base URL
+  const API_BASE_URL = 'http://localhost:8000'; // Define API base URL
 
   useEffect(() => {
     async function fetchRepos() {
