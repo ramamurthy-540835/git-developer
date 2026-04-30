@@ -223,7 +223,7 @@ Output shape:
       "header": "...",
       "caption": "...",
       "active_node": "...",
-      "node_state": {{}},
+      "node_state": {{"done": [], "active": "", "pending": []}},
       "active_subgraph": "",
       "dimmed_subgraphs": [],
       "camera_hint": "static",
