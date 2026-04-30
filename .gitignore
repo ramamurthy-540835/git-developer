@@ -46,3 +46,4 @@ tmp/
 *.mp4
 *.srt
 .env.local
+.env.local
