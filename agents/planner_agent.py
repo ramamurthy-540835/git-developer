@@ -203,7 +203,7 @@ RULES
    - header         : <= 3 words
    - caption        : ONE sentence, <= 10 words, <= 60 chars
    - active_node    : node id/name from graph
-   - node_state     : {{done:[], active:'', pending:[]}}
+   - node_state     : {{"done": [], "active": "", "pending": []}}
    - active_subgraph and dimmed_subgraphs (optional)
    - camera_hint    : zoom_to_node | static | drift_left | drift_right
    - sceneType      : "text" (always for LLM generated scenes)
