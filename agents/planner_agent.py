@@ -229,7 +229,6 @@ Output shape:
       "camera_hint": "static",
       "sceneType": "text",
       "mermaidDiagramUrl": null
-    }},
-    // ... {num_llm_scenes} scenes
+    }}
   ]
 }}
