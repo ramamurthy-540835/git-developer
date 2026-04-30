@@ -131,6 +131,10 @@ def publish_readme(repo_url: str, readme_content: str, branch: str, commit_messa
     put_resp = requests.put(put_url, headers=headers, json=payload, timeout=30)
     if put_resp.status_code not in (200, 201):
         raise RuntimeError(f'Publish failed: {put_resp.status_code} {put_resp.text}')
+    put_json = put_resp.json() or {}
+    commit = put_json.get('commit') or {}
+    commit_sha = commit.get('sha')
+    commit_url = commit.get('html_url')
 
     default_branch_resp = requests.get(f'https://api.github.com/repos/{owner}/{repo}', headers=headers, timeout=30)
     if default_branch_resp.status_code != 200:
@@ -145,6 +149,29 @@ def publish_readme(repo_url: str, readme_content: str, branch: str, commit_messa
     }
     pr_resp = requests.post(f'https://api.github.com/repos/{owner}/{repo}/pulls', headers=headers, json=pr_payload, timeout=30)
     if pr_resp.status_code not in (200, 201):
+        if pr_resp.status_code == 422 and 'already exists' in pr_resp.text:
+            existing_pr_resp = requests.get(
+                f'https://api.github.com/repos/{owner}/{repo}/pulls?state=open&head={owner}:{branch}&base={base_branch}',
+                headers=headers,
+                timeout=30,
+            )
+            if existing_pr_resp.status_code == 200:
+                prs = existing_pr_resp.json() or []
+                if prs:
+                    pr = prs[0]
+                    return {
+                        'success': True,
+                        'repo': f'{owner}/{repo}',
+                        'branch': branch,
+                        'pr_url': pr.get('html_url'),
+                        'pr_number': pr.get('number'),
+                        'pr_title': pr.get('title'),
+                        'pr_already_exists': True,
+                        'base_branch': base_branch,
+                        'head_branch': branch,
+                        'commit_sha': commit_sha,
+                        'commit_url': commit_url,
+                    }
         raise RuntimeError(f'PR creation failed: {pr_resp.status_code} {pr_resp.text}')
     pr = pr_resp.json()
     return {
@@ -154,4 +181,52 @@ def publish_readme(repo_url: str, readme_content: str, branch: str, commit_messa
         'pr_url': pr.get('html_url'),
         'pr_number': pr.get('number'),
         'pr_title': pr.get('title'),
+        'pr_already_exists': False,
+        'base_branch': base_branch,
+        'head_branch': branch,
+        'commit_sha': commit_sha,
+        'commit_url': commit_url,
+    }
+
+
+def merge_pull_request(repo_url: str, pr_number: int, github_token: str, merge_method: str = 'squash') -> Dict[str, Any]:
+    owner, repo = parse_owner_repo(repo_url)
+    headers = _headers(github_token)
+    payload = {'merge_method': merge_method}
+    resp = requests.put(
+        f'https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/merge',
+        headers=headers,
+        json=payload,
+        timeout=30,
+    )
+    if resp.status_code not in (200, 201):
+        raise RuntimeError(f'Merge failed: {resp.status_code} {resp.text}')
+    data = resp.json() or {}
+    return {
+        'merged': bool(data.get('merged')),
+        'message': data.get('message', ''),
+        'sha': data.get('sha', ''),
+        'repo': f'{owner}/{repo}',
+        'pr_number': pr_number,
+    }
+
+
+def close_pull_request(repo_url: str, pr_number: int, github_token: str) -> Dict[str, Any]:
+    owner, repo = parse_owner_repo(repo_url)
+    headers = _headers(github_token)
+    payload = {'state': 'closed'}
+    resp = requests.patch(
+        f'https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}',
+        headers=headers,
+        json=payload,
+        timeout=30,
+    )
+    if resp.status_code not in (200, 201):
+        raise RuntimeError(f'Close PR failed: {resp.status_code} {resp.text}')
+    data = resp.json() or {}
+    return {
+        'closed': data.get('state') == 'closed',
+        'pr_url': data.get('html_url'),
+        'pr_number': data.get('number'),
+        'repo': f'{owner}/{repo}',
     }

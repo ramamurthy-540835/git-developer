@@ -50,3 +50,20 @@ export async function publishReadme({ repoUrl, readmeMarkdown, githubToken, bran
     pr_body: prBody,
   });
 }
+
+export async function mergePr({ repoUrl, githubToken, prNumber, mergeMethod = 'squash' }) {
+  return post('/api/pull-request/merge', {
+    repo_url: repoUrl,
+    github_token: githubToken,
+    pr_number: prNumber,
+    merge_method: mergeMethod,
+  });
+}
+
+export async function closePr({ repoUrl, githubToken, prNumber }) {
+  return post('/api/pull-request/close', {
+    repo_url: repoUrl,
+    github_token: githubToken,
+    pr_number: prNumber,
+  });
+}

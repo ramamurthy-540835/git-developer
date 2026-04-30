@@ -6,7 +6,7 @@ import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import MetricsCard from './MetricsCard';
 import PublishButtons from './PublishButtons';
 
-export default function ReadmeOutput({ readme, setReadme, metrics, setToast, onPrOpen }) {
+export default function ReadmeOutput({ readme, setReadme, metrics, setToast, onPrOpen, gitOps, repoUrl, runErrors, onMergePr, onClosePr }) {
   const [edit, setEdit] = useState(false);
   const readingMins = useMemo(() => Math.max(1, Math.ceil((readme || '').split(/\s+/).filter(Boolean).length / 220)), [readme]);
   const download = () => { const b = new Blob([readme || ''], { type:'text/markdown' }); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href = u; a.download = 'README.generated.md'; a.click(); URL.revokeObjectURL(u); };
@@ -28,5 +28,5 @@ export default function ReadmeOutput({ readme, setReadme, metrics, setToast, onP
       </div>
     )}
     <PublishButtons onDownload={download} onCopy={copy} onPr={onPrOpen} />
-  </div><MetricsCard metrics={metrics} readingMins={readingMins} /></section>;
+  </div><MetricsCard metrics={metrics} readingMins={readingMins} gitOps={gitOps} runErrors={runErrors} readme={readme} repoUrl={repoUrl} onMergePr={onMergePr} onClosePr={onClosePr} /></section>;
 }

@@ -1,3 +1,4 @@
+import re
 from typing import Any, Dict
 
 from agents.llm import generate_script
@@ -15,6 +16,98 @@ def _badge_repo(full_name: str) -> str:
     return _safe_slug(full_name).replace("_", "-")
 
 
+def _sanitize_mermaid(markdown: str) -> str:
+    # Fix invalid sequence arrow patterns like: Frontend-<<API: message
+    out = re.sub(r'(\b[A-Za-z0-9_]+\b)-<<(\b[A-Za-z0-9_]+\b):', r'\2-->>\1:', markdown)
+    # GitHub Mermaid parser is strict in stateDiagram labels; normalize risky label content.
+    out = out.replace('Short|Medium|Detailed', 'Short/Medium/Detailed')
+    out = out.replace('Technical|Executive|Tutorial', 'Technical/Executive/Tutorial')
+    out = out.replace('Formal ←→ Casual', 'Formal to Casual')
+    out = out.replace('\\n', ' - ')
+    out = out.replace('✓', 'OK')
+    out = out.replace('←→', 'to')
+    out = re.sub(r'(:[^\n`]*)\|([^\n`]*)', r'\1/\2', out)
+    return out
+
+
+def validate_readme_markdown(markdown: str) -> Dict[str, Any]:
+    errors = []
+    mermaid_blocks = re.findall(r"```mermaid\s*(.*?)```", markdown, flags=re.DOTALL | re.IGNORECASE)
+    if not mermaid_blocks:
+        errors.append('No Mermaid diagrams found.')
+    for i, block in enumerate(mermaid_blocks, start=1):
+        if '-<<' in block:
+            errors.append(f'Mermaid block {i}: invalid arrow "-<<".')
+        if 'stateDiagram-v2' in block:
+            if '|' in block:
+                errors.append(f'Mermaid block {i}: invalid "|" label separators in state diagram.')
+            if '←→' in block:
+                errors.append(f'Mermaid block {i}: unicode arrow "←→" not supported.')
+    return {'valid': len(errors) == 0, 'errors': errors, 'mermaid_count': len(mermaid_blocks)}
+
+
+def repair_readme_with_gemini(markdown: str) -> str:
+    prompt = f"""You are fixing markdown only.
+Task: Repair Mermaid syntax issues so GitHub renders all diagrams.
+Rules:
+- Keep content/sections unchanged unless required for Mermaid validity.
+- Replace invalid sequence arrow patterns like X-<<Y with Y-->>X.
+- In stateDiagram-v2 labels, replace "|" with "/" and replace unicode arrows like "←→" with "to".
+- Output only corrected markdown.
+
+Markdown:
+{markdown}
+"""
+    repaired = generate_script(prompt)
+    return _sanitize_mermaid(repaired or markdown)
+
+
+def extract_topical_insights_agent(state: Dict[str, Any]) -> Dict[str, Any]:
+    rp = state.get('repo_profile', {})
+    meta = rp.get('meta', {})
+    ev = rp.get('evidence', {})
+    snippets = ev.get('deep_snippets', [])[:10]
+    blocks = []
+    for s in snippets:
+        blocks.append(f"FILE: {s.get('path')}\n{s.get('snippet')}")
+    prompt = f"""Analyze this repository context and return concise JSON with keys:
+problem, domain, primary_users, key_capabilities (array), architecture_summary, api_surface (array), deployment_model, confidence (0-100).
+
+Repo: {meta}
+Snippets:
+{chr(10).join(blocks)}
+Return JSON only.
+"""
+    try:
+        raw = generate_script(prompt)
+        cleaned = raw.strip().strip("`")
+        state['repo_insights'] = cleaned
+        state.setdefault('progress', []).append({'stage': 'topical_insights', 'percent': 75, 'message': 'Topical insights extracted'})
+    except Exception as e:
+        state.setdefault('errors', []).append(f'topical_insights: {e}')
+    return state
+
+
+def quality_gate_agent(state: Dict[str, Any]) -> Dict[str, Any]:
+    md = state.get('readme_markdown', '')
+    weak_patterns = [
+        'is designed to reduce documentation bottlenecks',
+        'enterprise-grade README generation',
+        'No close competitors detected',
+        'Core modules include agents/, api/, orchestrator/, frontend/, and scripts/.',
+        'Not detected from repository files',
+    ]
+    hits = [p for p in weak_patterns if p in md]
+    has_facts = ('/api/' in md) or ('requirements.txt' in md) or ('package.json' in md)
+    if len(hits) >= 2 and not has_facts:
+        state.setdefault('errors', []).append('quality_gate: output too generic')
+        state.setdefault('metrics', {})['quality_gate_passed'] = False
+    else:
+        state.setdefault('metrics', {})['quality_gate_passed'] = True
+    state.setdefault('progress', []).append({'stage': 'quality_gate', 'percent': 95, 'message': 'Quality gate evaluated'})
+    return state
+
+
 def readme_composer_agent(state: Dict[str, Any]) -> Dict[str, Any]:
     rp = state.get('repo_profile', {})
     meta = rp.get('meta', {})
@@ -24,6 +117,7 @@ def readme_composer_agent(state: Dict[str, Any]) -> Dict[str, Any]:
     bp = state.get('best_practices', {})
     commands = rp.get('real_commands', [])
     evidence = rp.get('evidence', {})
+    insights = state.get('repo_insights', '')
 
     repo_name = meta.get('name') or 'project'
     full_name = meta.get('full_name') or repo_name
@@ -85,6 +179,9 @@ Repository evidence:
 Competitive insights:
 {chr(10).join(comp_lines)}
 
+Topical insights (JSON):
+{insights or 'N/A'}
+
 Differentiators:
 {chr(10).join(usp) if usp else '- Structured multi-agent workflow with direct GitHub PR publishing.'}
 
@@ -108,7 +205,10 @@ Requirements:
 - Ensure all commands are runnable and based on provided context.
 - Reason from code evidence. Do not invent frameworks, services, or APIs not present in provided snippets.
 - Mermaid diagrams must reflect actual architecture inferred from file evidence.
+- Use only valid sequence arrows in Mermaid (`->>`, `-->>`, `-x`, `--x`). Never use `-<<`.
+- In `stateDiagram-v2`, avoid `|` separators and uncommon unicode arrows in labels.
 - In each major section, anchor claims to observed evidence (file names, dependencies, routes, modules).
+- Mention at least 6 concrete repo-specific facts from snippets/files.
 - Output markdown only.
 """
 
@@ -322,6 +422,8 @@ Avoid:
         llm_note = 'Gemini call failed; used fallback template.'
         markdown = fallback_markdown
 
+    markdown = _sanitize_mermaid(markdown)
+
     completeness = 85 if commands else 65
     uniqueness = 80 if usp else 60
     metrics = {
@@ -336,4 +438,28 @@ Avoid:
     state['readme_markdown'] = markdown
     state['metrics'] = metrics
     state['progress'].append({'stage': 'compose_readme', 'percent': 100, 'message': 'README composed'})
+    return state
+
+
+def validate_and_repair_readme_agent(state: Dict[str, Any]) -> Dict[str, Any]:
+    markdown = state.get('readme_markdown', '')
+    report = validate_readme_markdown(markdown)
+    if report['valid']:
+        state.setdefault('progress', []).append({'stage': 'readme_qc', 'percent': 100, 'message': 'README validation passed'})
+        state.setdefault('metrics', {})['readme_validation'] = {'valid': True, 'errors': [], 'mermaid_count': report['mermaid_count']}
+        return state
+
+    repaired = repair_readme_with_gemini(markdown)
+    repaired_report = validate_readme_markdown(repaired)
+    state['readme_markdown'] = repaired
+    state.setdefault('metrics', {})['readme_validation'] = {
+        'valid': repaired_report['valid'],
+        'errors': repaired_report['errors'],
+        'mermaid_count': repaired_report['mermaid_count'],
+    }
+    if repaired_report['valid']:
+        state.setdefault('progress', []).append({'stage': 'readme_qc', 'percent': 100, 'message': 'README auto-repaired by Gemini and validated'})
+    else:
+        state.setdefault('errors', []).append('readme_qc: Mermaid validation failed after repair')
+        state.setdefault('progress', []).append({'stage': 'readme_qc', 'percent': 100, 'message': 'README validation failed after repair'})
     return state

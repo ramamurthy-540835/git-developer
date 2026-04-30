@@ -9,7 +9,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from orchestrator.langgraph_workflow import run_workflow
-from agents.shared_github import fetch_user, list_repos, publish_readme
+from agents.shared_github import fetch_user, list_repos, publish_readme, merge_pull_request, close_pull_request
+from agents.readme_composer import validate_readme_markdown, repair_readme_with_gemini
 
 router = APIRouter(prefix='/api', tags=['readme'])
 
@@ -37,6 +38,13 @@ class PublishRequest(BaseModel):
     commit_message: str = 'docs: update README'
     pr_title: str = Field(default='docs: update README', max_length=100)
     pr_body: str = Field(default='Auto-generated README by git-developer', max_length=5000)
+
+
+class PrActionRequest(BaseModel):
+    repo_url: str
+    github_token: str
+    pr_number: int
+    merge_method: str = 'squash'
 
 
 @router.post('/auth/token')
@@ -146,15 +154,39 @@ async def stream_job(job_id: str):
 @router.post('/publish-readme')
 def publish_readme_endpoint(req: PublishRequest):
     try:
+      validation = validate_readme_markdown(req.readme_markdown or '')
+      readme_markdown = req.readme_markdown or ''
+      repaired = False
+      if not validation.get('valid'):
+          readme_markdown = repair_readme_with_gemini(readme_markdown)
+          repaired_validation = validate_readme_markdown(readme_markdown)
+          repaired = repaired_validation.get('valid', False)
+          if not repaired:
+              raise HTTPException(
+                  status_code=400,
+                  detail={
+                      'message': 'README validation failed. Mermaid syntax is invalid.',
+                      'validation_errors': repaired_validation.get('errors', []),
+                      'action': 'Regenerate README or edit Mermaid blocks.',
+                  },
+              )
       pr_title = (req.pr_title or '').strip() or 'docs: update README'
       pr_body = (req.pr_body or '').strip() or 'Auto-generated README by git-developer'
-      result = publish_readme(req.repo_url, req.readme_markdown, req.branch, req.commit_message, req.github_token, pr_title, pr_body)
+      result = publish_readme(req.repo_url, readme_markdown, req.branch, req.commit_message, req.github_token, pr_title, pr_body)
       return {
           'success': True,
           'result': result,
           'pr_url': result.get('pr_url'),
           'pr_number': result.get('pr_number'),
           'pr_title': result.get('pr_title'),
+          'pr_already_exists': result.get('pr_already_exists', False),
+          'branch': result.get('branch', req.branch),
+          'readme_repaired': repaired,
+          'commit_sha': result.get('commit_sha'),
+          'commit_url': result.get('commit_url'),
+          'base_branch': result.get('base_branch'),
+          'head_branch': result.get('head_branch'),
+          'validation': {'valid': True, 'repaired': repaired, 'errors': []},
       }
     except Exception as e:
       msg = str(e)
@@ -163,3 +195,21 @@ def publish_readme_endpoint(req: PublishRequest):
       if '401' in msg or '403' in msg:
           msg = 'Token invalid or expired'
       raise HTTPException(status_code=400, detail=msg)
+
+
+@router.post('/pull-request/merge')
+def merge_pr_endpoint(req: PrActionRequest):
+    try:
+        result = merge_pull_request(req.repo_url, req.pr_number, req.github_token, req.merge_method)
+        return {'success': True, 'result': result}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post('/pull-request/close')
+def close_pr_endpoint(req: PrActionRequest):
+    try:
+        result = close_pull_request(req.repo_url, req.pr_number, req.github_token)
+        return {'success': True, 'result': result}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))

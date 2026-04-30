@@ -15,6 +15,11 @@
 .progress-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--color-border); }
 .error-banner { display: flex; justify-content: space-between; background: color-mix(in srgb, var(--color-error) 12%, transparent); border: 1px solid #D73A49; color: #D73A49; padding: 10px 12px; border-radius: 6px; }
 .publish-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+.btn-compact { padding: 7px 10px; font-size: 12px; line-height: 1.1; }
+.btn-icon { display: inline-block; min-width: 16px; margin-right: 6px; font-size: 11px; font-weight: 700; text-align: center; opacity: 0.85; }
+.ops-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.diag-strip { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; }
+.diag-strip > div { padding: 10px; border: 1px solid var(--color-border); border-radius: 6px; background: color-mix(in srgb, var(--color-primary-soft) 35%, transparent); }
 .toast { position: fixed; bottom: 16px; right: 16px; background: var(--color-surface); border: 1px solid var(--color-border); padding: 12px 16px; border-radius: 6px; animation: slidein .3s ease-out; }
 .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.5); border-top: 2px solid #fff; border-radius: 50%; display:inline-block; animation: spin .8s linear infinite; margin-right: 8px; vertical-align: middle; }
 .ellipsis { display: inline-block; width: 14px; overflow: hidden; vertical-align: bottom; animation: dots 1s steps(4,end) infinite; }
@@ -26,6 +31,7 @@
   .topbar-inner { grid-template-columns: 1fr auto; }
   .nav { grid-column: 1 / -1; overflow-x: auto; }
   .repo-grid, .split, .publish-row { grid-template-columns: 1fr; }
+  .diag-strip { grid-template-columns: repeat(2, minmax(0,1fr)); }
 }
 .modal-backdrop {
   position: fixed;
@@ -44,3 +50,9 @@
   border-radius: 6px;
   padding: 16px;
 }
+
+.ops-flow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.op-node { border: 1px solid var(--color-border); border-radius: 999px; padding: 2px 8px; font-size: 12px; color: var(--color-text-muted); }
+.op-node.done { color: var(--color-success); border-color: color-mix(in srgb, var(--color-success) 40%, var(--color-border)); }
+.op-node.active { color: var(--color-primary); border-color: color-mix(in srgb, var(--color-primary) 40%, var(--color-border)); }
+.op-arrow { color: var(--color-text-muted); font-size: 12px; }
