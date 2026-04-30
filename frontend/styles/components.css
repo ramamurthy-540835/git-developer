@@ -1,0 +1,46 @@
+.topbar { position: fixed; top: 0; left: 0; right: 0; z-index: 40; background: var(--color-bg); border-bottom: 1px solid var(--color-border); }
+.topbar-inner { max-width: 1200px; margin: 0 auto; height: 64px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; padding: 0 16px; }
+.brand { display: flex; gap: 8px; align-items: center; font-weight: 700; }
+.nav { display: flex; gap: 8px; }
+.nav a { padding: 8px 12px; border-radius: 6px; color: var(--color-text-muted); }
+.nav a.active { background: var(--color-primary-soft); color: var(--color-primary); }
+.header-actions { display: flex; justify-content: flex-end; gap: 8px; align-items: center; }
+.hero { margin-bottom: 16px; padding: 32px; border-radius: 6px; border: 1px solid var(--color-border); background: linear-gradient(135deg, var(--color-primary-soft), transparent); }
+.grid { display: grid; gap: 16px; }
+.repo-grid { display: grid; gap: 16px; grid-template-columns: repeat(3, minmax(0,1fr)); }
+.repo-card { border: 1px solid var(--color-border); border-radius: 6px; padding: 16px; background: var(--color-surface); transition: all .3s ease-out; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
+.repo-card:hover { transform: scale(1.02); box-shadow: 0 3px 8px rgba(0,0,0,0.15); }
+.repo-card.selected { border: 2px solid var(--color-primary); }
+.split { display: grid; grid-template-columns: 7fr 3fr; gap: 16px; }
+.progress-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--color-border); }
+.error-banner { display: flex; justify-content: space-between; background: color-mix(in srgb, var(--color-error) 12%, transparent); border: 1px solid #D73A49; color: #D73A49; padding: 10px 12px; border-radius: 6px; }
+.publish-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+.toast { position: fixed; bottom: 16px; right: 16px; background: var(--color-surface); border: 1px solid var(--color-border); padding: 12px 16px; border-radius: 6px; animation: slidein .3s ease-out; }
+.spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.5); border-top: 2px solid #fff; border-radius: 50%; display:inline-block; animation: spin .8s linear infinite; margin-right: 8px; vertical-align: middle; }
+.ellipsis { display: inline-block; width: 14px; overflow: hidden; vertical-align: bottom; animation: dots 1s steps(4,end) infinite; }
+@keyframes dots { to { width: 24px; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes slidein { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@media (max-width: 1200px) { .repo-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+@media (max-width: 768px) {
+  .topbar-inner { grid-template-columns: 1fr auto; }
+  .nav { grid-column: 1 / -1; overflow-x: auto; }
+  .repo-grid, .split, .publish-row { grid-template-columns: 1fr; }
+}
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: grid;
+  place-items: center;
+  z-index: 50;
+}
+.modal-card {
+  width: min(720px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 16px;
+}

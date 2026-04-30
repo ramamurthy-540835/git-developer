@@ -1,143 +1,85 @@
 'use client';
-
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
+import AuthSection from '../../components/AuthSection';
+import RepoSelector from '../../components/RepoSelector';
+import GenerationOptions from '../../components/GenerationOptions';
 import ProgressStream from '../../components/ProgressStream';
+import ReadmeOutput from '../../components/ReadmeOutput';
+import ToastNotification from '../../components/ToastNotification';
+import CreatePrModal from '../../components/CreatePrModal';
+import { useAppStore } from '../../store/useAppStore';
+import { generateReadme, pollJob, publishReadme } from '../../lib/api';
 
 export default function GeneratePage() {
-  const apiBaseUrl = useMemo(() => {
-    return process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
-  }, []);
-
-  const [githubToken, setGithubToken] = useState('');
-  const [repoUrl, setRepoUrl] = useState('https://github.com/ramamurthy-540835/git-developer');
-  const [jobId, setJobId] = useState('');
-  const [loading, setLoading] = useState(false);
+  const { selectedRepo, token, addHistory } = useAppStore();
+  const [generating, setGenerating] = useState(false);
+  const [toast, setToast] = useState('');
+  const [toastTone, setToastTone] = useState('success');
   const [readme, setReadme] = useState('');
   const [metrics, setMetrics] = useState(null);
-  const [status, setStatus] = useState('');
-  const [branch, setBranch] = useState('main');
-  const [commitMessage, setCommitMessage] = useState('docs: update generated README');
+  const [stages, setStages] = useState([]);
+  const [statusText, setStatusText] = useState('Waiting to start');
+  const [prOpen, setPrOpen] = useState(false);
 
-  const startGeneration = async () => {
-    setLoading(true);
-    setStatus('Starting generation...');
-    setReadme('');
-    setMetrics(null);
+  const onGenerate = async (options) => {
+    if (!selectedRepo?.url || !token) {
+      setToastTone('error');
+      setToast('Error generating README. Check repo access.');
+      return;
+    }
+    setGenerating(true);
+    setStages([{ name:'Analyzing repository', state:'active' }, { name:'Finding competitors', state:'pending' }, { name:'Extracting best practices', state:'pending' }, { name:'Composing README', state:'pending' }]);
     try {
-      const res = await fetch(`${apiBaseUrl}/api/generate-readme`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repo_url: repoUrl, github_token: githubToken }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Failed to start generation');
-      setJobId(data.job_id);
-      setStatus(`Job started: ${data.job_id}`);
+      const started = await generateReadme({ repoUrl: selectedRepo.url, githubToken: token, options });
+      const jobId = started.job_id;
+      let done = false;
+      while (!done) {
+        // eslint-disable-next-line no-await-in-loop
+        const j = await pollJob(jobId);
+        const s = j?.status || '';
+        setStatusText(j?.message || 'Scanning requirements.txt');
+        if (s === 'completed') {
+          const result = j.result || {};
+          setReadme(result.readme_markdown || '');
+          setMetrics(result.metrics || null);
+          if (result.metrics) addHistory({ repo: selectedRepo.full_name || selectedRepo.url, score: result.metrics.quality_score || 0, ts: Date.now() });
+          setStages((prev) => prev.map((x) => ({ ...x, state:'done', time: '2s ago' })));
+          setToastTone('success');
+          setToast('README generated successfully');
+          done = true;
+        } else if (s === 'failed') {
+          throw new Error(j?.error || 'Generation failed');
+        } else {
+          setStages((prev) => {
+            const idx = Math.min(3, Math.floor((Date.now() / 1500) % 4));
+            return prev.map((x, i) => ({ ...x, state: i < idx ? 'done' : i === idx ? 'active' : 'pending' }));
+          });
+          // eslint-disable-next-line no-await-in-loop
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+      }
     } catch (e) {
-      setStatus(`Error: ${e.message}`);
+      setToastTone('error');
+      setToast(e.message || 'Error generating README. Check repo access.');
     } finally {
-      setLoading(false);
+      setGenerating(false);
     }
   };
 
-  const publishReadme = async () => {
-    setStatus('Publishing README...');
-    try {
-      const res = await fetch(`${apiBaseUrl}/api/publish-readme`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          repo_url: repoUrl,
-          readme_markdown: readme,
-          github_token: githubToken,
-          branch,
-          commit_message: commitMessage,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Publish failed');
-      setStatus(`Published to ${data.result.repo} on ${data.result.branch}`);
-    } catch (e) {
-      setStatus(`Publish error: ${e.message}`);
-    }
+  const onPrSubmit = async ({ branch, commitMessage, prTitle, prBody }) => {
+    const d = await publishReadme({ repoUrl: selectedRepo.url, readmeMarkdown: readme, githubToken: token, branch, commitMessage, prTitle, prBody });
+    setToastTone('success');
+    setToast(d.pr_url ? `PR created successfully! View PR #${d.pr_number}` : 'PR created successfully!');
   };
 
-  return (
-    <main style={{ maxWidth: 1100, margin: '24px auto', padding: '0 16px', fontFamily: 'ui-sans-serif, system-ui' }}>
-      <h1 style={{ fontSize: 28, marginBottom: 16 }}>README Generator</h1>
-
-      <div style={{ display: 'grid', gap: 12, marginBottom: 16 }}>
-        <input
-          type='password'
-          placeholder='GitHub Token'
-          value={githubToken}
-          onChange={(e) => setGithubToken(e.target.value)}
-          style={{ padding: 10, border: '1px solid #ccc', borderRadius: 8 }}
-        />
-        <input
-          type='text'
-          placeholder='Repository URL'
-          value={repoUrl}
-          onChange={(e) => setRepoUrl(e.target.value)}
-          style={{ padding: 10, border: '1px solid #ccc', borderRadius: 8 }}
-        />
-        <button onClick={startGeneration} disabled={loading || !githubToken || !repoUrl} style={{ padding: '10px 14px', borderRadius: 8 }}>
-          {loading ? 'Starting...' : 'Generate README'}
-        </button>
-      </div>
-
-      {!!jobId && (
-        <div style={{ marginBottom: 16 }}>
-          <ProgressStream
-            apiBaseUrl={apiBaseUrl}
-            jobId={jobId}
-            onFinal={(payload) => {
-              const result = payload?.result || {};
-              if (result.readme_markdown) setReadme(result.readme_markdown);
-              if (result.metrics) setMetrics(result.metrics);
-              setStatus(payload.status === 'completed' ? 'Generation completed' : `Generation failed: ${payload.error || 'unknown'}`);
-            }}
-          />
-        </div>
-      )}
-
-      <div style={{ marginBottom: 12, color: '#374151' }}>{status}</div>
-
-      {metrics && (
-        <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
-          <Metric label='Quality Score' value={metrics.quality_score} />
-          <Metric label='Completeness' value={`${metrics.completeness}%`} />
-          <Metric label='Uniqueness' value={`${metrics.uniqueness_score}%`} />
-          <Metric label='Read Time' value={`${metrics.estimated_read_time_min} min`} />
-        </div>
-      )}
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
-        <textarea
-          value={readme}
-          onChange={(e) => setReadme(e.target.value)}
-          placeholder='Generated README markdown will appear here...'
-          style={{ width: '100%', minHeight: 420, padding: 12, borderRadius: 8, border: '1px solid #ccc', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
-        />
-      </div>
-
-      <div style={{ marginTop: 16, display: 'grid', gap: 8 }}>
-        <h3>Publish</h3>
-        <input value={branch} onChange={(e) => setBranch(e.target.value)} placeholder='Branch' style={{ padding: 10, border: '1px solid #ccc', borderRadius: 8 }} />
-        <input value={commitMessage} onChange={(e) => setCommitMessage(e.target.value)} placeholder='Commit message' style={{ padding: 10, border: '1px solid #ccc', borderRadius: 8 }} />
-        <button onClick={publishReadme} disabled={!readme || !githubToken || !repoUrl} style={{ padding: '10px 14px', borderRadius: 8 }}>
-          Publish README
-        </button>
-      </div>
-    </main>
-  );
-}
-
-function Metric({ label, value }) {
-  return (
-    <div style={{ border: '1px solid #ddd', borderRadius: 8, padding: 12, minWidth: 160 }}>
-      <div style={{ fontSize: 12, color: '#6b7280' }}>{label}</div>
-      <div style={{ fontSize: 20, fontWeight: 700 }}>{value}</div>
-    </div>
-  );
+  return <div className='grid'>
+    <section className='hero'><h1 style={{ marginTop:0 }}>Generate professional READMEs in seconds</h1><p style={{ color:'var(--color-text-muted)' }}>AI-powered. Competitive analysis included.</p></section>
+    <AuthSection />
+    <RepoSelector />
+    <GenerationOptions onGenerate={onGenerate} generating={generating} />
+    {generating && <ProgressStream stages={stages} statusText={statusText} eta='~8 seconds' onAbort={() => setGenerating(false)} />}
+    <ReadmeOutput readme={readme} setReadme={setReadme} metrics={metrics} setToast={setToast} onPrOpen={() => setPrOpen(true)} />
+    <CreatePrModal open={prOpen} onClose={() => setPrOpen(false)} onSubmit={onPrSubmit} repoName={selectedRepo?.full_name || ''} />
+    <ToastNotification message={toast} tone={toastTone} onDone={() => setToast('')} />
+  </div>;
 }

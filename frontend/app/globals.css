@@ -1,3 +1,39 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+:root {
+  --color-primary: #0066cc;
+  --color-primary-hover: #0052a3;
+  --color-primary-soft: #e7f6ff;
+  --color-success: #28a745;
+  --color-error: #d73a49;
+  --color-warning: #bf8700;
+  --color-neutral: #6a737d;
+  --color-bg: #f6f8fa;
+  --color-surface: #ffffff;
+  --color-border: #d0d7de;
+  --color-text: #24292e;
+  --color-text-muted: #6a737d;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono: Monaco, "Courier New", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --color-bg: #0d1117; --color-surface: #161b22; --color-border: #30363d; --color-text: #e1e4e8; --color-text-muted: #8b949e; --color-primary:#2f81f7; --color-primary-hover:#1f6feb; --color-primary-soft:#0b2239; }
+}
+[data-theme='dark'] { --color-bg: #0d1117; --color-surface: #161b22; --color-border: #30363d; --color-text: #e1e4e8; --color-text-muted: #8b949e; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body { background: var(--color-bg); color: var(--color-text); font-family: var(--font-sans); font-size: 14px; }
+h1, h2, h3 { font-size: 20px; margin: 0; }
+.app-shell { min-height: 100vh; }
+.main-wrap { max-width: 1200px; margin: 0 auto; padding: 96px 16px 32px; }
+.card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 6px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
+.input, .textarea, select { width: 100%; border: 1px solid #d0d0d0; border-radius: 4px; padding: 12px; background: var(--color-surface); color: var(--color-text); font-size: 14px; }
+.input::placeholder { color: #999; }
+.textarea { min-height: 320px; font-family: var(--font-mono); font-size: 12px; }
+.btn { border-radius: 6px; border: 1px solid var(--color-border); padding: 12px; cursor: pointer; transition: all .3s ease-out; }
+.btn:hover { transform: scale(1.02); box-shadow: 0 3px 8px rgba(0,0,0,0.15); }
+.btn:disabled { opacity: .6; cursor: not-allowed; transform: none; box-shadow: none; }
+.btn-primary { background: #0066cc; color: #fff; border-color: #0066cc; }
+.btn-primary:hover { background: #0052a3; }
+.btn-secondary { background: transparent; color: #0066cc; border-color: #0066cc; }
+.btn-danger { background: var(--color-error); color: #fff; border-color: var(--color-error); }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid #0066cc; outline-offset: 2px; box-shadow: 0 0 0 3px rgba(0,102,204,0.2); border-color: #0066cc; }
+@media (max-width: 768px) { .main-wrap { padding-top: 84px; } }
