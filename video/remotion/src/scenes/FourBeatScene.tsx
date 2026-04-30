@@ -27,15 +27,17 @@ export const FourBeatScene: React.FC<Props> = ({plan, productName}) => {
   const progress = ((idx + 1) / scenes.length) * 100;
 
   return (
-    <AbsoluteFill style={{backgroundColor: '#101820', color: '#ECF3FF', fontFamily: 'Segoe UI, Arial, sans-serif', opacity}}>
+    <AbsoluteFill style={{backgroundColor: '#101820', color: '#ECF3FF', fontFamily: 'Segoe UI, Arial, sans-serif', opacity, overflow: 'hidden'}}>
       <div style={{height: 96, background: '#1F2A3A', display: 'flex', alignItems: 'center', padding: '0 36px', fontSize: 34, fontWeight: 700}}>
         {productName}
       </div>
       <div style={{display: 'flex', flex: 1, padding: 64, gap: 48}}>
-        <div style={{flex: 1}}>
-          <div style={{fontSize: 52, fontWeight: 700, transform: `translateY(${titleY}px)`}}>{s.title}</div>
-          <div style={{fontSize: 30, marginTop: 14, color: '#BBD4FF'}}>{s.subtitle}</div>
-          <div style={{marginTop: 380, fontSize: 28, background: 'rgba(0,0,0,0.45)', padding: '14px 18px', borderRadius: 12}}>
+        <div style={{flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between'}}>
+          <div>
+            <div style={{fontSize: 52, fontWeight: 700, transform: `translateY(${titleY}px)`}}>{s.title}</div>
+            <div style={{fontSize: 30, marginTop: 14, color: '#BBD4FF'}}>{s.subtitle}</div>
+          </div>
+          <div style={{fontSize: 28, background: 'rgba(0,0,0,0.45)', padding: '14px 18px', borderRadius: 12, wordBreak: 'break-word', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical'}}>
             {s.caption}
           </div>
         </div>
