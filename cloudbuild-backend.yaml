@@ -36,6 +36,7 @@ steps:
       - --platform=managed
       - --allow-unauthenticated
       - --port=8000
+      - --set-env-vars=GOOGLE_CLOUD_PROJECT=ctoteam,GCP_PROJECT_ID=ctoteam,GCP_REGION=us-central1,VERTEX_AI_LOCATION=global,GEMINI_MODEL_NAME=gemini-2.5-flash
     waitFor: [push-sha]
 
 images:
