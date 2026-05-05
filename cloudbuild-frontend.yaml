@@ -1,44 +1,83 @@
+################################################################################
+# git-developer — Frontend Cloud Build
+# Deploys: git-developer-frontend → Cloud Run (Next.js, port 3000)
+#
+# Usage:
+#   gcloud builds submit --config=cloudbuild-frontend.yaml --project=ctoteam .
+################################################################################
+
+substitutions:
+  _REGION: us-central1
+  _REPO: us-central1-docker.pkg.dev/ctoteam/cloud-run-source-deploy
+  _FRONTEND_SVC: git-developer-frontend
+  _BACKEND_URL: https://git-developer-backend-gygcwrc62a-uc.a.run.app
+
 steps:
-  - name: "gcr.io/cloud-builders/docker"
+
+  # ── 1. Build frontend image ────────────────────────────────────────────────
+  - id: build-frontend
+    name: gcr.io/cloud-builders/docker
     args:
       - build
+      - --build-arg
+      - NEXT_PUBLIC_API_BASE_URL=${_BACKEND_URL}
       - -t
-      - gcr.io/$PROJECT_ID/git-developer-frontend:$SHORT_SHA
+      - ${_REPO}/${_FRONTEND_SVC}:$BUILD_ID
       - -t
-      - gcr.io/$PROJECT_ID/git-developer-frontend:latest
+      - ${_REPO}/${_FRONTEND_SVC}:latest
       - ./frontend
-    id: build-frontend
+    waitFor: ['-']
 
-  - name: "gcr.io/cloud-builders/docker"
+  # ── 2. Push ────────────────────────────────────────────────────────────────
+  - id: push-frontend
+    name: gcr.io/cloud-builders/docker
     args:
       - push
-      - gcr.io/$PROJECT_ID/git-developer-frontend:$SHORT_SHA
-    id: push-sha
+      - --all-tags
+      - ${_REPO}/${_FRONTEND_SVC}
     waitFor: [build-frontend]
 
-  - name: "gcr.io/cloud-builders/docker"
-    args:
-      - push
-      - gcr.io/$PROJECT_ID/git-developer-frontend:latest
-    id: push-latest
-    waitFor: [build-frontend]
-
-  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+  # ── 3. Deploy to Cloud Run ─────────────────────────────────────────────────
+  - id: deploy-frontend
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
     args:
       - run
       - deploy
-      - git-developer-frontend
-      - --image=gcr.io/$PROJECT_ID/git-developer-frontend:$SHORT_SHA
-      - --region=us-central1
+      - ${_FRONTEND_SVC}
+      - --image=${_REPO}/${_FRONTEND_SVC}:$BUILD_ID
+      - --region=${_REGION}
       - --platform=managed
       - --allow-unauthenticated
       - --port=3000
-    waitFor: [push-sha]
+      - --memory=1Gi
+      - --cpu=1
+      - --min-instances=0
+      - --max-instances=5
+      - --timeout=300
+      - --set-env-vars=NEXT_PUBLIC_API_BASE_URL=${_BACKEND_URL}
+    waitFor: [push-frontend]
+
+  # ── 4. Print URL ───────────────────────────────────────────────────────────
+  - id: print-url
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        FE=$$(gcloud run services describe ${_FRONTEND_SVC} --region=${_REGION} --format='value(status.url)')
+        echo ""
+        echo "======================================================="
+        echo "  git-developer Frontend — Deployed"
+        echo "  Dashboard : $$FE"
+        echo "  Backend   : ${_BACKEND_URL}"
+        echo "======================================================="
+    waitFor: [deploy-frontend]
 
 images:
-  - gcr.io/$PROJECT_ID/git-developer-frontend:$SHORT_SHA
-  - gcr.io/$PROJECT_ID/git-developer-frontend:latest
+  - ${_REPO}/${_FRONTEND_SVC}:$BUILD_ID
+  - ${_REPO}/${_FRONTEND_SVC}:latest
 
 options:
   logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
